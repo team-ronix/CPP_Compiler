@@ -142,15 +142,23 @@ expr_opt:
     | expr
 ;
 
-
+ASSIGNMENT:
+    /* empty */
+    | '=' expr
+;   
+    
+CHAINED_DECLARATION:
+    /* empty */
+    | ',' IDENTIFIER ASSIGNMENT CHAINED_DECLARATION
+;
 
 stmt:
       ';'
     | expr ';'
     | PRINT '(' expr ')' ';'
-    | TYPE IDENTIFIER '=' expr ';'
+    | TYPE IDENTIFIER ASSIGNMENT CHAINED_DECLARATION ';'
+    | CONST TYPE IDENTIFIER ASSIGNMENT CHAINED_DECLARATION ';'
     | IDENTIFIER '=' expr ';'
-    | CONST TYPE IDENTIFIER '=' expr ';'
     | FUNCTION_CALL ';'
     | IDENTIFIER INC ';'
     | IDENTIFIER DEC ';'
