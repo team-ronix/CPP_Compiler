@@ -11,11 +11,9 @@ letter  [a-zA-Z]
 
 %%
 
-/* keywords */
+
 "const"    { return CONST; }
-"int"      { 
-    
-    return INT; }
+"int"      { return INT; }
 "float"    { return FLOAT; }
 "bool"     {  return BOOL; }
 "char"     { return CHAR; }
@@ -33,27 +31,18 @@ letter  [a-zA-Z]
 "return"   { return RETURN; }
 
 
-/* logical operators */
 "||" { return OR; }
 "&&" { return AND; }
 "!"  { return NOT; }
 
-/* relational operators */
 ">=" { return GE; }
 "<=" { return LE; }
 "==" { return EQ; }
 "!=" { return NE; }
 
-/* multi-character operators */ MCOP
-"++" { return OAO; }
-"--" { return OAO; }
-"+=" { return TAO; }
-"-=" { return TAO; }
-"*=" { return TAO; }
-"/=" { return TAO; }
-"%=" { return TAO; }
+"++" { return INC; }
+"--" { return DEC; }
 
-/* literals */
 
 {digit}+\.{digit}+ {
     yylval.fValue = atof(yytext);
@@ -92,36 +81,30 @@ letter  [a-zA-Z]
 \"[^"\n]*["\n] {
     int len = yyleng;
 
-    if (yytext[len-1] != '"') {
-        warning("improperly terminated string");
-    }
-
     yylval.sValue = (char*)malloc(len);
     strncpy(yylval.sValue, yytext+1, len-2);
     yylval.sValue[len-2] = '\0';
-
-    printf("found '%s'\n", yylval.sValue);
     return STRING_LITERAL;
 }
 
-/* identifiers */
 {letter}({letter}|{digit})* {
     yylval.sValue = strdup(yytext);
     return IDENTIFIER;
 }
 
-/* operators & punctuation */
-[-()+*/;{}.,<>=%] { return *yytext; }
+"/*"(.|\n)*?"*/"   ;
 
-/* whitespace */
-[ \t\n]+ ;
+"//".*   ;
 
-/* error */
+[-()+*/;:{}.,<>=%] { return *yytext; }
+
+
+[ \t\r\n]+ ;
+
+
 . { yyerror("Unknown character"); }
 
 %%
-
-int main() {
-    yylex();
-    return 0;
+int yywrap(void) {
+    return 1;
 }

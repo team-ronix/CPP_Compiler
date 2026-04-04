@@ -1,0 +1,63 @@
+const int a = 10;
+int x = 5;
+float y = 3.14;
+bool flag = true;
+char c = 'A';
+string s = "hello";
+
+x = x + 1;
+y = y * 2.5;
+
+x++;
+x--;
+
+print(x);
+print(y);
+print(s);
+
+/* if-else */
+if (x > 5) {
+    print(x);
+} else {
+    print(0);
+}
+
+/* while loop */
+while (x < 10) {
+    x = x + 1;
+    if (x == 8) {
+        break;
+    }
+}
+
+/* do-while */
+do {
+    x = x - 1;
+} while (x > 0);
+
+/* for loop */
+for (int i = 0; i < 5; i++) {
+    print(i);
+    if (i == 2) continue;
+}
+
+/* switch-case */
+switch (x) {
+    case 1:
+        print(1);
+    case 2:
+        print(2);
+}
+
+/* function definition */
+int sum(int a = 1, int b = 2) {
+    int result = a + b;
+    return result;
+}
+
+/* function call */
+sum(3, 4);
+{
+    int x = 5;
+    int y = 10;
+}

@@ -1,35 +1,19 @@
 %{
-    #define MAX_SYMBOLS 100
-    #define MAX_SYMBOL_LENGTH 100
-    #include <stdlib.h> 
-    #include <stdarg.h> 
-    #include "calc3.h"
-    #include "structs.h"
-    int symCount = 0;
-    /* prototypes */ 
-    nodeType *opr(int oper, int nops, ...); 
-    nodeType *id(int i); 
-    nodeType *con(int value); 
-    void freeNode(nodeType *p);
-    int ex(nodeType *p); 
-    int yylex(void); 
-    void yyerror(char *s);
-    IdNode* symTable = malloc(sizeof(IdNode)); 
-    /*TODO: For loop, switch-case, function*/
+#include <stdio.h>
+#include <stdlib.h>
+
+void yyerror(const char *s);
+int yylex(void);
 %}
 
 %union {
-    int iValue; 
+    int iValue;
     float fValue;
     char cValue;
     char *sValue;
-    bool bValue;
-    nodeType *nPtr;                
-};
+    int bValue;
+}
 
-
-
-/* Literal and identifier tokens with types from %union */
 %token <iValue> INTEGER
 %token <fValue> FLOATING
 %token <cValue> CHARACTER
@@ -37,147 +21,164 @@
 %token <sValue> IDENTIFIER
 %token <bValue> BOOLEAN
 
-/* Keywords (no associated value needed) */
 %token INT FLOAT BOOL CHAR STRING
 %token IF ELSE WHILE FOR SWITCH CASE DO BREAK CONTINUE RETURN
-
-/* Logical operators */
+%token PRINT
 %token OR AND NOT
-
-/* Relational operators */
 %token GE LE EQ NE
+%token INC DEC
+%token CONST
 
-/* Operator precedence */
 %left GE LE EQ NE '>' '<'
 %left '+' '-'
-%left '*' '/'
+%left '*' '/' '%'
+%left AND
+%left OR
+%nonassoc right NOT 
 %nonassoc UMINUS
 %nonassoc IF
 %nonassoc ELSE
 
-program: 
-  function                { exit(0); } 
-  ; 
- 
-function: 
-    function stmt         { ex($2); freeNode($2); } 
-  | /* NULL */ 
-  ; 
- 
-stmt: 
-    ';'                     { $$ = opr(';', 2, NULL, NULL); } 
-  | expr ';'                { $$ = $1; } 
-  | PRINT expr ';'          { $$ = opr(PRINT, 1, $2); } 
-  | VARIABLE '=' expr ';'   { $$ = opr('=', 2, id($1), $3); } 
-  | DO stmt WHILE '(' expr ')' ';' { $$ = opr(DO, 2, $2, $5); }
-  | FOR (expr; expr; expr) stmt { $$ = opr(FOR, 4, $2, $4, $6, $8); }
-  | WHILE '(' expr ')' stmt { $$ = opr(WHILE, 2, $3, $5); } 
-  | IF '(' expr ')' stmt %prec IF { $$ = opr(IF, 2, $3, $5); } 
-  
-  | IF '(' expr ')' stmt ELSE stmt 
-                            { $$ = opr(IF, 3, $3, $5, $7); } 
-  | BLOCK       { $$ = $1; } 
-  | IDENTIFIER 
-    ; 
- 
-stmt_list: 
-    stmt                  { $$ = $1; } 
-  | stmt_list stmt        { $$ = opr(';', 2, $1, $2); } 
-  ; 
- 
-expr: 
-    INTEGER               { $$ = con($1); } 
-  | VARIABLE              { $$ = id($1); } 
-  | '-' expr %prec UMINUS { $$ = opr(UMINUS, 1, $2); } 
-  | expr '+' expr         { $$ = opr('+', 2, $1, $3); } 
-  | expr '-' expr         { $$ = opr('-', 2, $1, $3); } 
-  | expr '*' expr         { $$ = opr('*', 2, $1, $3); } 
-  | expr '/' expr         { $$ = opr('/', 2, $1, $3); } 
-  | expr '<' expr         { $$ = opr('<', 2, $1, $3); } 
-  | expr '>' expr         { $$ = opr('>', 2, $1, $3); } 
-  | expr GE expr          { $$ = opr(GE, 2, $1, $3); } 
-  | expr LE expr          { $$ = opr(LE, 2, $1, $3); } 
-  | expr NE expr          { $$ = opr(NE, 2, $1, $3); } 
-  | expr EQ expr          { $$ = opr(EQ, 2, $1, $3); } 
-  | '(' expr ')'          { $$ = $2; } 
-  ; 
-
-VARIABLE: 
-        INT IDENTIFIER { $$ = $2; }
-    | FLOAT IDENTIFIER { $$ = $2; }
-    | BOOL IDENTIFIER { $$ = $2; }
-    | CHAR IDENTIFIER { $$ = $2; }
-    | STRING IDENTIFIER { $$ = $2; }
-    | IDENTIFIER { $$ = $1; }
-    ;
-
-    BLOCK: 
-        '{' stmt_list '}' { $$ = $2; }
+%start program
 
 %%
 
-nodeType *con(union value, valType type) { 
-    nodeType *p; 
-    /* allocate node */ 
-    if ((p = malloc(sizeof(nodeType))) == NULL) 
-    yyerror("out of memory"); 
-    /* copy information */ 
-    p->type = typeCon; 
-    case type: 
-        typeInt: p->con.valType = typeInt; p->con.iValue = value.iValue; break; 
-        typeFloat: p->con.valType = typeFloat; p->con.fValue = value.fValue; break; 
-        typeChar: p->con.valType = typeChar; p->con.cValue = value.cValue; break; 
-        typeString: p->con.valType = typeString; p->con.sValue = value.sValue; break; 
-        typeBool: p->con.valType = typeBool; p->con.bValue = value.bValue; break;
-    return p; 
-}
-nodeType *id(union value, valType type) { 
-    nodeType *p; 
-    /* allocate node */ 
-    if ((p = malloc(sizeof(nodeType))) == NULL) 
-    yyerror("out of memory"); 
-    /* copy information */ 
-    p->type = typeId; 
-    case type: 
-        typeInt: p->id.type = typeInt; p->id.value.iValue = value.iValue; break;
-        typeFloat: p->id.type = typeFloat; p->id.value.fValue = value.fValue; break;
-        typeChar: p->id.type = typeChar; p->id.value.cValue = value.cValue; break;
-        typeString: p->id.type = typeString; p->id.value.sValue = value.sValue; break;
-        typeBool: p->id.type = typeBool; p->id.value.bValue = value.bValue; break;
-    return p; 
+program:
+    top_level_list
+;
+
+top_level_list:
+      /* empty */
+    | top_level_list top_level_item
+;
+
+top_level_item:
+      stmt
+    | FUNCTION
+;
+
+
+stmt_list:
+      stmt
+    | stmt_list stmt
+    ;
+
+expr:
+      IDENTIFIER
+    | INTEGER
+    | FLOATING
+    | BOOLEAN
+    | CHARACTER
+    | STRING_LITERAL
+    | '-' expr %prec UMINUS
+    | expr '+' expr
+    | expr '-' expr
+    | expr '*' expr
+    | expr '/' expr
+    | expr '<' expr
+    | expr '>' expr
+    | expr GE expr
+    | expr LE expr
+    | expr NE expr
+    | expr EQ expr
+    | '(' expr ')'
+    | NOT expr
+    | expr AND expr
+    | expr OR expr
+    ;
+
+TYPE:
+    INT
+    | FLOAT
+    | BOOL
+    | CHAR
+    | STRING
+    ;
+
+BLOCK_STMT_LIST:
+      /* empty */
+    |stmt_list
+    ;
+
+BLOCK:
+      '{' BLOCK_STMT_LIST '}'
+    ;
+
+PARAM_LIST:
+    /* empty */
+    | TYPE IDENTIFIER DEFAULT_VAL
+    | PARAM_LIST ',' TYPE IDENTIFIER DEFAULT_VAL
+    ;
+
+FUNCTION:
+    TYPE IDENTIFIER '('PARAM_LIST ')' BLOCK
+  ;
+
+ARG_LIST:
+    /* empty */
+    | expr
+    | ARG_LIST ',' expr
+;
+
+FUNCTION_CALL:
+    IDENTIFIER '(' ARG_LIST ')'
+;
+
+DEFAULT_VAL:
+    '=' expr
+    | /* empty */
+    ;
+
+FOR_INIT:
+    TYPE IDENTIFIER '=' expr
+    | IDENTIFIER '=' expr
+    | /* empty */
+;
+
+expr_opt:
+      /* empty */
+    |IDENTIFIER INC
+    | IDENTIFIER DEC
+    | expr
+;
+
+
+
+stmt:
+      ';'
+    | expr ';'
+    | PRINT '(' expr ')' ';'
+    | TYPE IDENTIFIER '=' expr ';'
+    | IDENTIFIER '=' expr ';'
+    | CONST TYPE IDENTIFIER '=' expr ';'
+    | FUNCTION_CALL ';'
+    | IDENTIFIER INC ';'
+    | IDENTIFIER DEC ';'
+    | BREAK ';'
+    | CONTINUE ';'
+    | RETURN expr ';'
+    | DO stmt WHILE '(' expr ')' ';'
+    | FOR '(' FOR_INIT ';' expr ';' expr_opt ')' stmt
+    | WHILE '(' expr ')' stmt
+    | IF '(' expr ')' stmt %prec IF
+    | IF '(' expr ')' stmt ELSE stmt
+    | SWITCH '(' expr ')' '{' CASE_LIST '}'
+    | BLOCK
+    ;
+
+CASE_LIST:
+        CASE expr ':' stmt_list CASE_LIST
+    | /* empty */
+    ;
+    
+
+
+%%
+
+void yyerror(const char *s) {
+    fprintf(stderr, "Syntax error: %s\n", s);
 }
 
-nodeType *opr(int oper, int nops, ...) { 
-    va_list ap; 
-    nodeType *p; 
-    int i; 
-    /* allocate node, extending op array */ 
-    if ((p = malloc(sizeof(nodeType) + (nops-1) * sizeof(nodeType *))) == NULL) 
-        yyerror("out of memory"); 
-    /* copy information */ 
-    p->type = typeOpr; 
-    p->opr.oper = oper; 
-    p->opr.nops = nops; 
-    va_start(ap, nops); 
-    for (i = 0; i < nops; i++) 
-        p->opr.op[i] = va_arg(ap, nodeType*); 
-    va_end(ap); 
-    return p;
-}
-
-void freeNode(nodeType *p) { 
-    int i; 
-    if (!p) return; 
-    if (p->type == typeOpr) { 
-    for (i = 0; i < p->opr.nops; i++) 
-    freeNode(p->opr.op[i]); 
-    } 
-    free (p); 
-    } 
-    void yyerror(char *s) { 
-    fprintf(stdout, "%s\n", s); 
-    } 
-    int main(void) { 
-    yyparse(); 
-    return 0; 
+int main(void) {
+    return yyparse();
 }

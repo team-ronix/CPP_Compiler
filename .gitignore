@@ -1,1 +1,4 @@
-*.txt
+*.yy.c
+*.exe
+*.tab.c
+*.tab.h
