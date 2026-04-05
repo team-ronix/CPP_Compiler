@@ -93,6 +93,7 @@ TYPE:
     | BOOL
     | CHAR
     | STRING
+    | VOID
     ;
 
 BLOCK_STMT_LIST:

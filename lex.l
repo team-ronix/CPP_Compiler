@@ -11,7 +11,7 @@ letter  [a-zA-Z]
 
 %%
 
-
+"void"     { return VOID; }
 "const"    { return CONST; }
 "int"      { return INT; }
 "float"    { return FLOAT; }
