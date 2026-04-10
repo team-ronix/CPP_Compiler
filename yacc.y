@@ -1,9 +1,13 @@
 %{
 #include <stdio.h>
 #include <stdlib.h>
+#include "./structs.h"
+#include <string.h>
 
 void yyerror(const char *s);
 int yylex(void);
+symbolTable *globalTable = new symbolTable;
+
 %}
 
 %union {
@@ -28,6 +32,7 @@ int yylex(void);
 %token GE LE EQ NE
 %token INC DEC
 %token CONST
+%token VOID
 
 %left GE LE EQ NE '>' '<'
 %left '+' '-'

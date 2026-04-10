@@ -1,3 +1,5 @@
+#include <stdbool.h>
+
 typedef enum
 {
     typeCon,
@@ -5,17 +7,17 @@ typedef enum
     typeOpr
 } nodeEnum;
 
-typedef enum valType
+typedef enum
 {
     typeInt,
     typeFloat,
     typeBool,
     typeChar,
     typeString
-};
+} valType;
 
 /* constants */
-typedef struct
+typedef struct valNode
 {
     valType valType;
     union
@@ -27,20 +29,20 @@ typedef struct
         char *sValue;
     } value;
 
-} conNodeType;
+} valNode;
 
 /* operators */
 typedef struct
 {
-    int oper;                  /* operator */
-    int nops;                  /* number of operands */
-    struct nodeTypeTag *op[1]; /* operands, extended at runtime */
+    int oper;
+    int nops;
+    struct nodeTypeTag *op[1];
 } oprNodeType;
 
 typedef struct
 {
     valType type;
-
+    char *id;
     union
     {
         int iValue;
@@ -49,19 +51,23 @@ typedef struct
         char cValue;
         char *sValue;
     } value;
-
     bool isConst;
-    bool isInitialized;
-    idNodeType *next[26];
-} idNodeType;
+} var;
 
-typedef struct
+typedef struct varNode
 {
-    nodeEnum type; /* type of node */
-    union
-    {
-        conNodeType con;
-        idNodeType id;
-        oprNodeType opr;
-    };
-} nodeType;
+    var variable;
+    struct varNode *next;
+} varNode;
+
+typedef struct symbolTable
+{
+    // char *id;
+    struct symbolTable *parent;
+    varNode *variables;
+} symbolTable;
+
+varNode *findVariable(symbolTable *table, const char *id);
+varNode *addVariable(symbolTable *table, const char *id, const char *type);
+bool isVariableDeclared(symbolTable *table, const char *id);
+bool removeVariable(symbolTable *table, const char *id);
