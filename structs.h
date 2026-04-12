@@ -1,3 +1,6 @@
+#ifndef STRUCTS_H
+#define STRUCTS_H
+
 #include <stdbool.h>
 
 typedef enum
@@ -13,13 +16,14 @@ typedef enum
     typeFloat,
     typeBool,
     typeChar,
-    typeString
+    typeString,
+    noType
 } valType;
 
 /* constants */
 typedef struct valNode
 {
-    valType valType;
+    valType type;
     union
     {
         int iValue;
@@ -52,12 +56,15 @@ typedef struct
         char *sValue;
     } value;
     bool isConst;
+    bool isInitialized;
+    bool isUsed;
 } var;
 
 typedef struct varNode
 {
     var variable;
     struct varNode *next;
+    struct symbolTable *scope;
 } varNode;
 
 typedef struct symbolTable
@@ -68,6 +75,11 @@ typedef struct symbolTable
 } symbolTable;
 
 varNode *findVariable(symbolTable *table, const char *id);
-varNode *addVariable(symbolTable *table, const char *id, const char *type);
-bool isVariableDeclared(symbolTable *table, const char *id);
+varNode *addVariable(symbolTable *table, const char *id, valType type);
+varNode *addVariableWithValue(symbolTable *table, const char *id, valType type, bool isConst, valNode value);
 bool removeVariable(symbolTable *table, const char *id);
+void assignValue(varNode *varNode, valNode value, valType type);
+bool editValue(symbolTable *table, const char *id, const valNode *newValue);
+bool isInCurrentScope(symbolTable *table, const char *id);
+void printSymbolTable(symbolTable *table);
+#endif
