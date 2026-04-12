@@ -203,7 +203,15 @@ CHAINED_DECLARATION:
 ;
 
 expr:
-    IDENTIFIER {}
+    IDENTIFIER { 
+        varNode *var = findVariable(currentScope, $1);
+        if (var == NULL) {
+            fprintf(stderr, "Error: Variable '%s' not declared.\n", $1);
+            exit(1);
+        }
+        var->variable.isUsed = true;
+        $$ = varToValNode(var);
+    }
     | INTEGER    {
         valNode node;
         node.type = typeInt;

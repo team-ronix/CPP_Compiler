@@ -174,3 +174,33 @@ void printSymbolTable(symbolTable *table)
         current = current->next;
     }
 }
+
+valNode varToValNode(varNode *variable)
+{
+    valNode node;
+    node.type = variable->variable.type;
+    switch (variable->variable.type)
+    {
+    case typeInt:
+        node.value.iValue = variable->variable.value.iValue;
+        break;
+    case typeFloat:
+        node.value.fValue = variable->variable.value.fValue;
+        break;
+    case typeBool:
+        node.value.bValue = variable->variable.value.bValue;
+        break;
+    case typeChar:
+        node.value.cValue = variable->variable.value.cValue;
+        break;
+    case typeString:
+        if (variable->variable.value.sValue != NULL)
+            node.value.sValue = strdup(variable->variable.value.sValue);
+        else
+            node.value.sValue = NULL;
+        break;
+    default:
+        break;
+    }
+    return node;
+}
