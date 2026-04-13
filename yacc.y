@@ -6,12 +6,16 @@
 
 void yyerror(const char *s);
 int yylex(void);
+char *tempResult(void);
+void emit(const char *op, const char *arg1, const char *arg2, const char *result);
 symbolTable *globalTable = NULL;
 valType currentType = noType;
 symbolTable *currentScope = NULL;
 bool isConstDecl = false;
+int resultCounter = 0;
 // TODO: INT->FLOAT, FLOAT->INT, etc. in expr rules
 // TODO: default in switch case
+// TODO: int + int;?????
 %}
 
 %union {
@@ -21,7 +25,10 @@ bool isConstDecl = false;
     char *sValue;
     int bValue;
 
-    valNode val;
+    struct {
+        valNode val;
+        char *place;
+    } exprNode;
 
     struct {
         bool hasValue;
@@ -39,10 +46,10 @@ bool isConstDecl = false;
 %token <sValue> STRING_LITERAL
 %token <sValue> IDENTIFIER
 %token <bValue> BOOLEAN
-%type <val> expr
+%type <exprNode> expr
 
 %token INT FLOAT BOOL CHAR STRING
-%token IF ELSE WHILE FOR SWITCH CASE DO BREAK CONTINUE RETURN
+%token IF ELSE WHILE FOR SWITCH CASE DO BREAK CONTINUE RETURN DEFAULT
 %token PRINT
 %token OR AND NOT
 %token GE LE EQ NE
@@ -164,7 +171,7 @@ ASSIGNMENT:
     {$$.hasValue = 0;}
     | '=' expr { 
         $$.hasValue = 1;
-        $$.val = $2;
+        $$.val = $2.val;
      }
 ;   
     
@@ -207,43 +214,92 @@ expr:
         varNode *var = findVariable(currentScope, $1);
         if (var == NULL) {
             fprintf(stderr, "Error: Variable '%s' not declared.\n", $1);
-            exit(1);
+            // exit(1);
+        }
+        if (!var->variable.isInitialized) {
+            fprintf(stderr, "Error: Variable '%s' is used before initialization.\n", $1);
+            // exit(1);
         }
         var->variable.isUsed = true;
-        $$ = varToValNode(var);
+        char buffer[20];
+        sprintf(buffer, "%s", $1);
+        $$.place = strdup(buffer);
+        $$.val = varToValNode(var);
     }
     | INTEGER    {
         valNode node;
         node.type = typeInt;
         node.value.iValue = $1;
-        $$ = node;
+        char buffer[20];
+        sprintf(buffer, "%d", $1);
+        $$.place = strdup(buffer);
+        $$.val = node;
     }
     | FLOATING   {
         valNode node;
         node.type = typeFloat;
         node.value.fValue = $1;
-        $$ = node;
+        char buffer[20];
+        sprintf(buffer, "%f", $1);
+        $$.place = strdup(buffer);
+        $$.val = node;
     }
     | BOOLEAN    {
         valNode node;
         node.type = typeBool;
         node.value.bValue = $1;
-        $$ = node;
+        char buffer[6];
+        sprintf(buffer, "%s", $1 ? "true" : "false");
+        $$.place = strdup(buffer);
+        $$.val = node;
     }
     | CHARACTER  {
         valNode node;
         node.type = typeChar;
         node.value.cValue = $1;
-        $$ = node;
+        char buffer[4];
+        sprintf(buffer, "'%c'", $1);
+        $$.place = strdup(buffer);
+        $$.val = node;
     }
     | STRING_LITERAL {
         valNode node;
         node.type = typeString;
         node.value.sValue = strdup($1);
-        $$ = node;
+        char buffer[256];
+        sprintf(buffer, "\"%s\"", $1);
+        $$.place = strdup(buffer);
+        $$.val = node;
     }
     | '-' expr %prec UMINUS {}
-    | expr '+' expr
+    | expr '+' expr {
+        valNode node;
+        if($1.val.type != $3.val.type) {
+            if(($1.val.type == typeInt && $3.val.type == typeFloat) || ($1.val.type == typeFloat && $3.val.type == typeInt)) {
+                node.type = typeFloat;
+                if($1.val.type == typeInt) {
+                    node.value.fValue = $1.val.value.iValue + $3.val.value.fValue;
+                }
+                else {
+                    node.value.fValue = $1.val.value.fValue + $3.val.value.iValue;
+                }
+            }
+            fprintf(stderr, "Error: Type mismatch in addition operation. Left operand type %d, right operand type %d.\n", $1.val.type, $3.val.type);
+            exit(1);
+        } else {
+            node.type = $1.val.type;
+            if(node.type == typeInt) {
+                node.value.iValue = $1.val.value.iValue + $3.val.value.iValue;
+            }
+            else if(node.type == typeFloat) {
+                node.value.fValue = $1.val.value.fValue + $3.val.value.fValue;
+            }
+        }
+        char *result = tempResult();
+        emit("ADD", $1.place, $3.place, result);
+        $$.place = strdup(result);
+        $$.val = node;
+    }
     | expr '-' expr
     | expr '*' expr
     | expr '/' expr
@@ -324,12 +380,22 @@ stmt:
 
 CASE_LIST:
         CASE expr ':' stmt_list CASE_LIST
-    | /* empty */
+    | DEFAULT ':' stmt_list
     ;
     
 
 
 %%
+
+char* tempResult(void) {
+    char buffer[20];
+    sprintf(buffer, "t_%d", resultCounter++);
+    return strdup(buffer);
+}
+
+void emit(const char *op, const char *arg1, const char *arg2, const char *result) {
+    printf("%s, %s, %s, %s\n", op, arg1 ? arg1 : "NULL", arg2 ? arg2 : "NULL", result ? result : "NULL");
+}
 
 void yyerror(const char *s) {
     fprintf(stderr, "Syntax error: %s\n", s);
@@ -337,6 +403,7 @@ void yyerror(const char *s) {
 
 int main(void) {
     globalTable = (symbolTable *)malloc(sizeof(symbolTable));
+
     if (globalTable == NULL) {
         fprintf(stderr, "Error: Failed to allocate global symbol table.\n");
         return 1;

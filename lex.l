@@ -30,6 +30,7 @@ letter  [a-zA-Z]
 "break"    { return BREAK; }
 "continue" { return CONTINUE; }
 "return"   { return RETURN; }
+"default"  { return DEFAULT; }
 
 
 "||" { return OR; }

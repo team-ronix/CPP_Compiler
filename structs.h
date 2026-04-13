@@ -74,6 +74,14 @@ typedef struct symbolTable
     varNode *variables;
 } symbolTable;
 
+typedef struct quadruple
+{
+    char *op;
+    char *arg1;
+    char *arg2;
+    char *result;
+} quadruple;
+
 varNode *findVariable(symbolTable *table, const char *id);
 varNode *addVariable(symbolTable *table, const char *id, valType type);
 varNode *addVariableWithValue(symbolTable *table, const char *id, valType type, bool isConst, valNode value);
