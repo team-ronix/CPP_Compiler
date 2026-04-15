@@ -147,6 +147,52 @@ bool editValue(symbolTable *table, const char *id, const valNode *newValue)
     }
     if (varNode->variable.type != newValue->type)
     {
+        if (varNode->variable.type == typeFloat && newValue->type == typeInt)
+        {
+            valNode convertedValue;
+            convertedValue.type = typeFloat;
+            convertedValue.value.fValue = (float)newValue->value.iValue;
+            assignValue(varNode, convertedValue, typeFloat);
+            varNode->variable.isInitialized = true;
+            return true;
+        }
+        if (varNode->variable.type == typeInt && newValue->type == typeFloat)
+        {
+            valNode convertedValue;
+            convertedValue.type = typeInt;
+            convertedValue.value.iValue = (int)newValue->value.fValue;
+            assignValue(varNode, convertedValue, typeInt);
+            varNode->variable.isInitialized = true;
+            return true;
+        }
+        if (varNode->variable.type == typeBool)
+        {
+            valNode convertedValue;
+            convertedValue.type = typeBool;
+            if (newValue->type == typeInt)
+                convertedValue.value.bValue = (bool)newValue->value.iValue;
+            else if (newValue->type == typeFloat)
+                convertedValue.value.bValue = (bool)newValue->value.fValue;
+            else if (newValue->type == typeChar)
+                convertedValue.value.bValue = (bool)newValue->value.cValue;
+            else if (newValue->type == typeString)
+                convertedValue.value.bValue = (bool)newValue->value.sValue;
+
+            assignValue(varNode, convertedValue, typeBool);
+            varNode->variable.isInitialized = true;
+            return true;
+        }
+        
+         if (varNode->variable.type == typeInt && newValue->type == typeBool)
+        {
+            valNode convertedValue;
+            convertedValue.type = typeInt;
+            convertedValue.value.iValue = newValue->value.bValue ? 1 : 0;
+            assignValue(varNode, convertedValue, typeInt);
+            varNode->variable.isInitialized = true;
+            return true;
+        }
+
         return false;
     }
     assignValue(varNode, *newValue, varNode->variable.type);
@@ -165,14 +211,61 @@ void printSymbolTable(symbolTable *table)
     varNode *current = table->variables;
     while (current != NULL)
     {
-        printf("Variable ID: %s, Type: %d, Is Const: %d, Is Initialized: %d, Is Used: %d\n",
+        printf("Variable ID: %s, Type: %s, Is Const: %d, Is Initialized: %d, Is Used: %d, Value: %s\n",
                current->variable.id,
-               current->variable.type,
+               valTypeToString(current->variable.type),
                current->variable.isConst,
                current->variable.isInitialized,
-               current->variable.isUsed);
+               current->variable.isUsed,
+               varToString(&current->variable));
         current = current->next;
     }
+}
+
+char *valTypeToString(valType type)
+{
+    switch (type)
+    {
+    case typeInt:
+        return "int";
+    case typeFloat:
+        return "float";
+    case typeBool:
+        return "bool";
+    case typeChar:
+        return "char";
+    case typeString:
+        return "string";
+    default:
+        return "unknown";
+    }
+}
+
+char *varToString(const var *variable)
+{
+    char buffer[256];
+    switch (variable->type)
+    {
+    case typeInt:
+        snprintf(buffer, sizeof(buffer), "%d", variable->value.iValue);
+        break;
+    case typeFloat:
+        snprintf(buffer, sizeof(buffer), "%f", variable->value.fValue);
+        break;
+    case typeBool:
+        snprintf(buffer, sizeof(buffer), "%s", variable->value.bValue ? "true" : "false");
+        break;
+    case typeChar:
+        snprintf(buffer, sizeof(buffer), "%c", variable->value.cValue);
+        break;
+    case typeString:
+        snprintf(buffer, sizeof(buffer), "%s", variable->value.sValue ? variable->value.sValue : "NULL");
+        break;
+    default:
+        snprintf(buffer, sizeof(buffer), "Unknown type");
+        break;
+    }
+    return strdup(buffer);
 }
 
 valNode varToValNode(varNode *variable)

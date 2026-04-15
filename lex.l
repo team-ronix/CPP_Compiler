@@ -5,12 +5,16 @@
 #include "structs.h"
 #include "y.tab.h"
 void yyerror(char *);
+
+int lineNumber = 1;
 %}
 
 digit   [0-9]
 letter  [a-zA-Z]
 
 %%
+
+\n      { lineNumber++; }
 
 "void"     { return VOID; }
 "const"    { return CONST; }

@@ -1,65 +1,22 @@
-const int a = 10;
-int x = 5;
-float y = 3.14;
+// 1. Basic Assignment
+int a = 5;
+a = 10;
+
+// 2. Chained decleration
+int a1, b1, c1 = 4;
+
+// 4. Different Data Types
+int i = 5;
+float f = 3.14;
+char ch = 'x';
 bool flag = true;
-char c = 'A';
-string s = "hello";
 
-x = x + 1;
-y = y * 2.5;
+// 6. Expression Assignments
+int e1;
+e1 = 5 + 3 * 2;
+e1 = (5 + 3) * 2;
+e1 = e1 + 1;
 
-x++;
-x--;
-
-print(x);
-print(y);
-print(s);
-
-/* if-else */
-if (x > 5) {
-    print(x);
-} else {
-    print(0);
-}
-
-/* while loop */
-while (x < 10) {
-    x = x + 1;
-    if (x == 8) {
-        break;
-    }
-}
-
-/* do-while */
-do {
-    x = x - 1;
-} while (x > 0);
-
-/* for loop */
-for (int i = 0; i < 5; i++) {
-    print(i);
-    if (i == 2) continue;
-}
-
-/* switch-case */
-switch (x) {
-    case 1:
-        print(1);
-    case 2:
-        print(2);
-}
-
-/* function definition */
-int sum(int a = 1, int b = 2) {
-    int result = a + b;
-    return result;
-}
-
-/* function call */
-sum(3, 4);
-{
-    int x = 5;
-    int y = 10;
-}
-
-int a=1,b=2,c=3,d=4,e=5,f=6,g=7,h=8,i=9,j=10;
+// 7. Self Assignment
+int s = 5;
+s = s;

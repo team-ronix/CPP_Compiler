@@ -8,11 +8,20 @@ void yyerror(const char *s);
 int yylex(void);
 char *tempResult(void);
 void emit(const char *op, const char *arg1, const char *arg2, const char *result);
+exprResult arithmeticOperations(valNode *left, valNode *right, const char *op);
+exprResult comparisonOperations(valNode *left, valNode *right, const char *op);
+extern int lineNumber;
 symbolTable *globalTable = NULL;
 valType currentType = noType;
 symbolTable *currentScope = NULL;
 bool isConstDecl = false;
 int resultCounter = 0;
+const char *resultQuadFile = "quads.txt";
+FILE *quadFile = NULL;
+
+
+
+
 // TODO: INT->FLOAT, FLOAT->INT, etc. in expr rules
 // TODO: default in switch case
 // TODO: int + int;?????
@@ -33,6 +42,7 @@ int resultCounter = 0;
     struct {
         bool hasValue;
         valNode val;
+        char *place;
     } assign;
     
 
@@ -116,7 +126,7 @@ BLOCK:
         symbolTable *newScope = (symbolTable *)malloc(sizeof(symbolTable));
         if (newScope == NULL) {
             fprintf(stderr, "Error: Failed to allocate memory for new scope.\n");
-            exit(1);
+            // exit(1);
         }
         newScope->parent = currentScope;
         newScope->variables = NULL;
@@ -172,6 +182,7 @@ ASSIGNMENT:
     | '=' expr { 
         $$.hasValue = 1;
         $$.val = $2.val;
+        $$.place = $2.place;
      }
 ;   
     
@@ -181,7 +192,7 @@ CHAINED_DECLARATION:
         {
         if(isInCurrentScope(currentScope, $2)) {
             fprintf(stderr, "Error: Variable '%s' already declared in this scope.\n", $2);
-            exit(1);
+            // exit(1);
         }
         if($3.hasValue) {
             
@@ -189,18 +200,18 @@ CHAINED_DECLARATION:
             valNode val = $3.val;
             if(val.type != currentType) {
                 fprintf(stderr, "Error: Type mismatch for variable '%s'. Expected type %d but got type %d.\n", $2, currentType, val.type);
-                exit(1);
+                // exit(1);
             }
             if(isInCurrentScope(currentScope, $2)) {
                 fprintf(stderr, "Error: Variable '%s' already declared in this scope.\n", $2);
-                exit(1);
+                // exit(1);
             }
             addVariableWithValue(currentScope, $2, currentType, isConstDecl, $3.val);
         }
         else {
             if(isConstDecl) {
                 fprintf(stderr, "Error: Constant variable '%s' must be initialized.\n", $2);
-                exit(1);
+                // exit(1);
             }
             printf("Declaring variable '%s' without initial value.\n", $2);
             addVariable(currentScope, $2, currentType);
@@ -214,11 +225,11 @@ expr:
         varNode *var = findVariable(currentScope, $1);
         if (var == NULL) {
             fprintf(stderr, "Error: Variable '%s' not declared.\n", $1);
-            // exit(1);
+            // // exit(1);
         }
         if (!var->variable.isInitialized) {
             fprintf(stderr, "Error: Variable '%s' is used before initialization.\n", $1);
-            // exit(1);
+            // // exit(1);
         }
         var->variable.isUsed = true;
         char buffer[20];
@@ -265,54 +276,195 @@ expr:
     | STRING_LITERAL {
         valNode node;
         node.type = typeString;
-        node.value.sValue = strdup($1);
+
+        char *str = $1;
+        node.value.sValue = strdup(str);
+        char clipped[256];
+
+        if (strlen(str) > 253) {
+            strncpy(clipped, str, 253);
+            clipped[251] = '.';
+            clipped[252] = '.';
+            clipped[253] = '.';
+            clipped[254] = '\0';
+            str = clipped;
+        }
+
         char buffer[256];
-        sprintf(buffer, "\"%s\"", $1);
+        sprintf(buffer, "\"%s\"", str);
         $$.place = strdup(buffer);
         $$.val = node;
     }
-    | '-' expr %prec UMINUS {}
-    | expr '+' expr {
-        valNode node;
-        if($1.val.type != $3.val.type) {
-            if(($1.val.type == typeInt && $3.val.type == typeFloat) || ($1.val.type == typeFloat && $3.val.type == typeInt)) {
-                node.type = typeFloat;
-                if($1.val.type == typeInt) {
-                    node.value.fValue = $1.val.value.iValue + $3.val.value.fValue;
-                }
-                else {
-                    node.value.fValue = $1.val.value.fValue + $3.val.value.iValue;
-                }
-            }
-            fprintf(stderr, "Error: Type mismatch in addition operation. Left operand type %d, right operand type %d.\n", $1.val.type, $3.val.type);
-            exit(1);
+    | '-' expr %prec UMINUS {
+        if ($2.val.type != typeInt && $2.val.type != typeFloat && $2.val.type != typeChar) {
+            fprintf(stderr, "Error: Unary '-' operator requires numeric operand.\n");
         } else {
-            node.type = $1.val.type;
-            if(node.type == typeInt) {
-                node.value.iValue = $1.val.value.iValue + $3.val.value.iValue;
+            valNode resultNode;
+            resultNode.type = $2.val.type;
+            if ($2.val.type == typeInt) {
+                resultNode.value.iValue = -$2.val.value.iValue;
+            } else if ($2.val.type == typeFloat) {
+                resultNode.value.fValue = -$2.val.value.fValue;
+            } else if ($2.val.type == typeChar) {
+                resultNode.type = typeInt; // Promote char to int for negation
+                resultNode.value.iValue = -(int)$2.val.value.cValue;
             }
-            else if(node.type == typeFloat) {
-                node.value.fValue = $1.val.value.fValue + $3.val.value.fValue;
-            }
+            char buffer[20];
+            sprintf(buffer, "-%s", $2.place);
+            $$.place = strdup(buffer);
+            $$.val = resultNode;
         }
-        char *result = tempResult();
-        emit("ADD", $1.place, $3.place, result);
-        $$.place = strdup(result);
-        $$.val = node;
+    }
+    | expr '+' expr {
+        exprResult res = arithmeticOperations(&$1.val, &$3.val, "+");
+        if(!res.error) {
+            emit("ADD", $1.place, $3.place, res.place);
+            $$.place = res.place;
+            $$.val = res.value;
+        }
     }
     | expr '-' expr
-    | expr '*' expr
-    | expr '/' expr
-    | expr '<' expr
-    | expr '>' expr
-    | expr GE expr
-    | expr LE expr
-    | expr NE expr
-    | expr EQ expr
-    | '(' expr ')' {}
-    | NOT expr {}
-    | expr AND expr
-    | expr OR expr
+    {
+        exprResult res = arithmeticOperations(&$1.val, &$3.val, "-");
+        if(!res.error) {
+            emit("SUB", $1.place, $3.place, res.place);
+            $$.place = res.place;
+            $$.val = res.value;
+        }
+    }
+    | expr '*' expr {
+        exprResult res = arithmeticOperations(&$1.val, &$3.val, "*");
+        if(!res.error) {
+            emit("MUL", $1.place, $3.place, res.place);
+            $$.place = res.place;
+            $$.val = res.value;
+        }
+    }
+    | expr '/' expr {
+        exprResult res = arithmeticOperations(&$1.val, &$3.val, "/");
+        if(!res.error) {
+            emit("DIV", $1.place, $3.place, res.place);
+            $$.place = res.place;
+            $$.val = res.value;
+        }
+    }
+    | expr '<' expr {
+        exprResult res = comparisonOperations(&$1.val, &$3.val, "<");
+        if(!res.error) {
+            emit("LT", $1.place, $3.place, res.place);
+            $$.place = res.place;
+            $$.val = res.value;
+        }
+    }
+    | expr '>' expr {
+        exprResult res = comparisonOperations(&$1.val, &$3.val, ">");
+        if(!res.error) {
+            emit("GT", $1.place, $3.place, res.place);
+            $$.place = res.place;
+            $$.val = res.value;
+        }
+    }
+    | expr GE expr {
+        exprResult res = comparisonOperations(&$1.val, &$3.val, ">=");
+        if(!res.error) {
+            emit("GE", $1.place, $3.place, res.place);
+            $$.place = res.place;
+            $$.val = res.value;
+        }
+    }
+    | expr LE expr {
+        exprResult res = comparisonOperations(&$1.val, &$3.val, "<=");
+        if(!res.error) {
+            emit("LE", $1.place, $3.place, res.place);
+            $$.place = res.place;
+            $$.val = res.value;
+        }
+    }
+    | expr NE expr {
+        exprResult res = comparisonOperations(&$1.val, &$3.val, "!=");
+        if(!res.error) {
+            emit("NE", $1.place, $3.place, res.place);
+            $$.place = res.place;
+            $$.val = res.value;
+        }
+    }
+    | expr EQ expr {
+        exprResult res = comparisonOperations(&$1.val, &$3.val, "==");
+        if(!res.error) {
+            emit("EQ", $1.place, $3.place, res.place);
+            $$.place = res.place;
+            $$.val = res.value;
+        }
+    }
+    | '(' expr ')' {
+        $$.place = $2.place;
+        $$.val = $2.val;
+    }
+    | NOT expr {
+        if ($2.val.type != typeInt && $2.val.type != typeFloat && $2.val.type != typeChar) {
+            fprintf(stderr, "Error: Unary 'NOT' operator requires numeric operand.\n");
+        } else {
+            valNode resultNode;
+            resultNode.type = typeBool;
+            if ($2.val.type == typeInt) {
+                resultNode.value.bValue = !($2.val.value.iValue);
+            } else if ($2.val.type == typeFloat) {
+                resultNode.value.bValue = !($2.val.value.fValue);
+            } else if ($2.val.type == typeChar) {
+                resultNode.value.bValue = !((int)$2.val.value.cValue);
+            }
+            char buffer[20];
+            sprintf(buffer, "NOT %s", $2.place);
+            $$.place = strdup(buffer);
+            $$.val = resultNode;
+        }
+    }
+    | expr AND expr {
+        if ($1.val.type != typeInt && $1.val.type != typeFloat && $1.val.type != typeChar) {
+            fprintf(stderr, "Error: Left operand of 'AND' must be numeric.\n");
+        } else if ($3.val.type != typeInt && $3.val.type != typeFloat && $3.val.type != typeChar) {
+            fprintf(stderr, "Error: Right operand of 'AND' must be numeric.\n");
+        } else {
+            valNode resultNode;
+            resultNode.type = typeBool;
+            bool leftVal = ($1.val.type == typeInt) ? $1.val.value.iValue :
+                           ($1.val.type == typeFloat) ? $1.val.value.fValue :
+                                                        (int)$1.val.value.cValue;
+
+            bool rightVal = ($3.val.type == typeInt) ? $3.val.value.iValue :
+                            ($3.val.type == typeFloat) ? $3.val.value.fValue :
+                                                         (int)$3.val.value.cValue;
+
+            resultNode.value.bValue = leftVal && rightVal;
+            char buffer[50];
+            sprintf(buffer, "%s AND %s", $1.place, $3.place);
+            $$.place = strdup(buffer);
+            $$.val = resultNode;
+        }
+    }
+    | expr OR expr {
+        if ($1.val.type != typeInt && $1.val.type != typeFloat && $1.val.type != typeChar) {
+            fprintf(stderr, "Error: Left operand of 'OR' must be numeric.\n");
+        } else if ($3.val.type != typeInt && $3.val.type != typeFloat && $3.val.type != typeChar) {
+            fprintf(stderr, "Error: Right operand of 'OR' must be numeric.\n");
+        } else {
+            valNode resultNode;
+            resultNode.type = typeBool;
+            bool leftVal = ($1.val.type == typeInt) ? $1.val.value.iValue :
+                           ($1.val.type == typeFloat) ? $1.val.value.fValue :
+                                                        (int)$1.val.value.cValue;
+
+            bool rightVal = ($3.val.type == typeInt) ? $3.val.value.iValue :
+                            ($3.val.type == typeFloat) ? $3.val.value.fValue :
+                                                         (int)$3.val.value.cValue;
+
+            resultNode.value.bValue = leftVal || rightVal;
+            char buffer[50];
+            sprintf(buffer, "%s OR %s", $1.place, $3.place);
+            $$.place = strdup(buffer);
+            $$.val = resultNode;
+        }
+    }
     ;
 
 CONST_TYPE:
@@ -324,18 +476,22 @@ stmt:
     | expr ';'
     | PRINT '(' expr ')' ';'
     | TYPE IDENTIFIER ASSIGNMENT CHAINED_DECLARATION ';' {
+        bool hasError = false;
         if(isInCurrentScope(currentScope, $2)) {
             fprintf(stderr, "Error: Variable '%s' already declared in this scope.\n", $2);
-            exit(1);
+            hasError = true;
         }
         if($3.hasValue) {
-            printf("Declaring variable '%s' with initial value.\n", $2);
             valNode val = $3.val;
             if(val.type != currentType) {
                 fprintf(stderr, "Error: Type mismatch for variable '%s'. Expected type %d but got type %d.\n", $2, currentType, val.type);
-                exit(1);
+                hasError = true;
             }
-            addVariableWithValue(currentScope, $2, currentType, false, $3.val);      
+            if(!hasError) {
+                printf("Declaring variable '%s' with initial value.\n", $2);
+                emit("=", $3.place, NULL, $2);
+                addVariableWithValue(currentScope, $2, currentType, false, $3.val);      
+            }
         }
         else {
             printf("Declaring variable '%s' without initial value.\n", $2);
@@ -344,25 +500,45 @@ stmt:
         currentType = noType;
     }
     | CONST_TYPE TYPE IDENTIFIER ASSIGNMENT CHAINED_DECLARATION ';' {
+        valNode val = $4.val;
+        bool hasError = false;
+
         if(isInCurrentScope(currentScope, $3)) {
             fprintf(stderr, "Error: Variable '%s' already declared in this scope.\n", $3, currentType);
-            exit(1);
+            // exit(1);
+            hasError = true;
         }
         if(!$4.hasValue) {
-            fprintf(stderr, "Error: Constant variable '%s' must be initialized.\n", $3);
-            exit(1);
+            fprintf(stderr, "Error: Constant variable '%s' must be initialized line number %d.\n", $3, lineNumber);
+            // exit(1);
+            hasError = true;
         }
-        printf("Declaring constant variable '%s' with initial value.\n", $3);
-        valNode val = $4.val;
         if(val.type != currentType) {
             fprintf(stderr, "Error: Type mismatch for variable '%s'. Expected type %d but got type %d.\n", $3, currentType, val.type);
-            exit(1);
+            hasError = true;
         }
-        addVariableWithValue(currentScope, $3, currentType, true, $4.val); 
-        isConstDecl = false;
-        currentType = noType;  
+        if (!hasError) {
+            printf("Declaring constant variable '%s' with initial value.\n", $3);
+            addVariableWithValue(currentScope, $3, currentType, true, $4.val); 
+            isConstDecl = false;
+            currentType = noType;
+        }  
     }
     | IDENTIFIER '=' expr ';'
+    {
+        varNode *var = findVariable(currentScope, $1);
+        if(!var) {
+            fprintf(stderr, "Error: Variable '%s' you can't assign value to variable not declared before \n", $1, currentType);
+            // exit(1);
+        } else {
+            if(!editValue(currentScope, $1, &$3.val)) {
+                fprintf(stderr, "Error: Failed to assign value to variable '%s'.\n", $1);
+                // exit(1);
+            }else {
+                emit("=", $3.place, NULL, $1);
+            }
+        }
+    }
     | FUNCTION_CALL ';'
     | IDENTIFIER INC ';'
     | IDENTIFIER DEC ';'
@@ -393,8 +569,140 @@ char* tempResult(void) {
     return strdup(buffer);
 }
 
+exprResult arithmeticOperations(valNode *left, valNode *right, const char *op) {
+    valNode resultNode;
+    exprResult res;
+    res.error = false;
+
+    if (left->type  != typeInt && left->type  != typeFloat && left->type  != typeChar) {
+        res.error = true;
+        fprintf(stderr, "Error: Unsupported type %d for left operand in '%s'.\n", left->type, op);
+        res.place = NULL;
+        return res;
+    }
+    if (right->type != typeInt && right->type != typeFloat && right->type != typeChar) {
+        res.error = true;
+        fprintf(stderr, "Error: Unsupported type %d for right operand in '%s'.\n", right->type, op);
+        res.place = NULL;
+        return res;
+    }
+
+    // Extract numeric values from any supported type
+    bool leftIsFloat  = (left->type  == typeFloat);
+    bool rightIsFloat = (right->type == typeFloat);
+
+    float lFloat = leftIsFloat  ? left->value.fValue  :
+                     left->type  == typeChar ? (float)(int)left->value.cValue  :
+                     (float)left->value.iValue;
+
+    float rFloat = rightIsFloat ? right->value.fValue :
+                     right->type == typeChar ? (float)(int)right->value.cValue :
+                     (float)right->value.iValue;
+
+    int lInt = leftIsFloat  ? (int)left->value.fValue  :
+               left->type  == typeChar ? (int)left->value.cValue  :
+               left->value.iValue;
+
+    int rInt = rightIsFloat ? (int)right->value.fValue :
+               right->type == typeChar ? (int)right->value.cValue :
+               right->value.iValue;
+
+    // Division by zero check
+    if (strcmp(op, "/") == 0) {
+        if ((leftIsFloat || rightIsFloat) ? (rFloat == 0.0) : (rInt == 0)) {
+            res.error = true;
+            fprintf(stderr, "Error: Division by zero.\n");
+            res.place = NULL;
+            return res;
+        }
+    }
+
+    bool eitherFloat = leftIsFloat || rightIsFloat;
+
+    if (eitherFloat) {
+        resultNode.type = typeFloat;
+        if      (strcmp(op, "+") == 0) resultNode.value.fValue = lFloat + rFloat;
+        else if (strcmp(op, "-") == 0) resultNode.value.fValue = lFloat - rFloat;
+        else if (strcmp(op, "*") == 0) resultNode.value.fValue = lFloat * rFloat;
+        else if (strcmp(op, "/") == 0) resultNode.value.fValue = lFloat / rFloat;
+        else {
+            res.error = true;
+            fprintf(stderr, "Error: Unknown operator '%s'.\n", op);
+            res.place = NULL;
+            return res;
+        }
+    } else {
+        resultNode.type = typeInt;
+        if      (strcmp(op, "+") == 0) resultNode.value.iValue = lInt + rInt;
+        else if (strcmp(op, "-") == 0) resultNode.value.iValue = lInt - rInt;
+        else if (strcmp(op, "*") == 0) resultNode.value.iValue = lInt * rInt;
+        else if (strcmp(op, "/") == 0) resultNode.value.iValue = lInt / rInt;
+        else {
+            res.error = true;
+            fprintf(stderr, "Error: Unknown operator '%s'.\n", op);
+            res.place = NULL;
+            return res;
+        }
+    }
+
+    res.value = resultNode;
+    res.place = strdup(tempResult());
+    return res;
+}
+
+exprResult comparisonOperations(valNode *left, valNode *right, const char *op) {
+    valNode resultNode;
+    exprResult res;
+    res.error = false;
+
+    if (left->type  != typeInt && left->type  != typeFloat && left->type  != typeChar) {
+        res.error = true;
+        fprintf(stderr, "Error: Unsupported type %d for left operand in '%s'.\n", left->type, op);
+        res.place = NULL;
+        return res;
+    }
+    if (right->type != typeInt && right->type != typeFloat && right->type != typeChar) {
+        res.error = true;
+        fprintf(stderr, "Error: Unsupported type %d for right operand in '%s'.\n", right->type, op);
+        res.place = NULL;
+        return res;
+    }
+
+    double lDouble = (left->type  == typeFloat) ? left->value.fValue  :
+                     (left->type  == typeChar)  ? (double)(int)left->value.cValue  :
+                     (double)left->value.iValue;
+
+    double rDouble = (right->type == typeFloat) ? right->value.fValue :
+                     (right->type == typeChar)  ? (double)(int)right->value.cValue :
+                     (double)right->value.iValue;
+
+    resultNode.type = typeBool;
+
+    if      (strcmp(op, "==") == 0) resultNode.value.iValue = (lDouble == rDouble);
+    else if (strcmp(op, "!=") == 0) resultNode.value.iValue = (lDouble != rDouble);
+    else if (strcmp(op, "<")  == 0) resultNode.value.iValue = (lDouble <  rDouble);
+    else if (strcmp(op, ">")  == 0) resultNode.value.iValue = (lDouble >  rDouble);
+    else if (strcmp(op, "<=") == 0) resultNode.value.iValue = (lDouble <= rDouble);
+    else if (strcmp(op, ">=") == 0) resultNode.value.iValue = (lDouble >= rDouble);
+    else {
+        res.error = true;
+        fprintf(stderr, "Error: Unknown comparison operator '%s'.\n", op);
+        res.place = NULL;
+        return res;
+    }
+
+    res.value = resultNode;
+    res.place = strdup(tempResult());
+    return res;
+}
+
 void emit(const char *op, const char *arg1, const char *arg2, const char *result) {
-    printf("%s, %s, %s, %s\n", op, arg1 ? arg1 : "NULL", arg2 ? arg2 : "NULL", result ? result : "NULL");
+    if (quadFile == NULL) {
+        fprintf(stderr, "Error: quad file is not open\n");
+        return;
+    }
+    fprintf(quadFile, "%s, %s, %s, %s\n", op, arg1 ? arg1 : "NULL", arg2 ? arg2 : "NULL", result ? result : "NULL");
+    fflush(quadFile);
 }
 
 void yyerror(const char *s) {
@@ -411,5 +719,15 @@ int main(void) {
     globalTable->parent = NULL;
     globalTable->variables = NULL;
     currentScope = globalTable;
-    return yyparse();
+
+    // open the file for writing quads
+    quadFile = fopen(resultQuadFile, "w");
+    if (quadFile == NULL) {
+        fprintf(stderr, "Error opening quadruples file\n");
+        return 1;
+    }
+    int parseStatus = yyparse();
+    printSymbolTable(globalTable);
+    fclose(quadFile);
+    return parseStatus;
 }

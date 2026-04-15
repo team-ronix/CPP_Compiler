@@ -74,6 +74,15 @@ typedef struct symbolTable
     varNode *variables;
 } symbolTable;
 
+typedef struct exprResult
+{
+    bool error;
+    valNode value;
+    char *place;
+} exprResult;
+
+
+
 typedef struct quadruple
 {
     char *op;
@@ -91,4 +100,6 @@ bool editValue(symbolTable *table, const char *id, const valNode *newValue);
 bool isInCurrentScope(symbolTable *table, const char *id);
 void printSymbolTable(symbolTable *table);
 valNode varToValNode(varNode *variable);
+char *valTypeToString(valType type);
+char *varToString(const var *variable);
 #endif
