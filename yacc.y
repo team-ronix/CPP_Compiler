@@ -206,6 +206,7 @@ CHAINED_DECLARATION:
                 fprintf(stderr, "Error: Variable '%s' already declared in this scope.\n", $2);
                 // exit(1);
             }
+            emit("DECL", $3.place, NULL, $2);
             addVariableWithValue(currentScope, $2, currentType, isConstDecl, $3.val);
         }
         else {
@@ -214,6 +215,7 @@ CHAINED_DECLARATION:
                 // exit(1);
             }
             printf("Declaring variable '%s' without initial value.\n", $2);
+            emit("DECL", NULL, NULL, $2);
             addVariable(currentScope, $2, currentType);
         }
     }
@@ -489,12 +491,13 @@ stmt:
             }
             if(!hasError) {
                 printf("Declaring variable '%s' with initial value.\n", $2);
-                emit("=", $3.place, NULL, $2);
+                emit("DECL", $3.place, NULL, $2);
                 addVariableWithValue(currentScope, $2, currentType, false, $3.val);      
             }
         }
         else {
             printf("Declaring variable '%s' without initial value.\n", $2);
+            emit("DECL", NULL, NULL, $2);
             addVariable(currentScope, $2, currentType);
         }
         currentType = noType;
@@ -520,6 +523,7 @@ stmt:
         if (!hasError) {
             printf("Declaring constant variable '%s' with initial value.\n", $3);
             addVariableWithValue(currentScope, $3, currentType, true, $4.val); 
+            emit("CONST", $4.place, NULL, $3);
             isConstDecl = false;
             currentType = noType;
         }  
