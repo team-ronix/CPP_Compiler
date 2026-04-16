@@ -102,4 +102,5 @@ void printSymbolTable(symbolTable *table, int level);
 valNode varToValNode(varNode *variable);
 char *valTypeToString(valType type);
 char *varToString(const var *variable);
+symbolTable *createSymbolTable(symbolTable *parent);
 #endif

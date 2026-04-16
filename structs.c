@@ -22,27 +22,27 @@ varNode *findVariable(symbolTable *table, const char *id)
 
 void assignValue(varNode *varNode, valNode value, valType type)
 {
-    switch (type)
-    {
-    case typeInt:
-        varNode->variable.value.iValue = value.value.iValue;
-        break;
-    case typeFloat:
-        varNode->variable.value.fValue = value.value.fValue;
-        break;
-    case typeBool:
-        varNode->variable.value.bValue = value.value.bValue;
-        break;
-    case typeChar:
-        varNode->variable.value.cValue = value.value.cValue;
-        break;
-    case typeString:
-        if (value.value.sValue != NULL)
-            varNode->variable.value.sValue = strdup(value.value.sValue);
-        else
-            varNode->variable.value.sValue = NULL;
-        break;
-    }
+    // switch (type)
+    // {
+    // case typeInt:
+    //     varNode->variable.value.iValue = value.value.iValue;
+    //     break;
+    // case typeFloat:
+    //     varNode->variable.value.fValue = value.value.fValue;
+    //     break;
+    // case typeBool:
+    //     varNode->variable.value.bValue = value.value.bValue;
+    //     break;
+    // case typeChar:
+    //     varNode->variable.value.cValue = value.value.cValue;
+    //     break;
+    // case typeString:
+    //     if (value.value.sValue != NULL)
+    //         varNode->variable.value.sValue = strdup(value.value.sValue);
+    //     else
+    //         varNode->variable.value.sValue = NULL;
+    //     break;
+    // }
 }
 
 varNode *addVariable(symbolTable *table, const char *id, valType type)
@@ -210,13 +210,13 @@ void printSymbolTable(symbolTable *table, int level)
     varNode *current = table->variables;
     while (current != NULL)
     {
-        printf("ID: %s | Type: %s | Const: %d | Init: %d | Used: %d | Value: %s\n",
+        printf("ID: %s | Type: %s | Const: %d | Init: %d | Used: %d\n",
                current->variable.id,
                valTypeToString(current->variable.type),
                current->variable.isConst,
                current->variable.isInitialized,
-               current->variable.isUsed,
-               varToString(&current->variable));
+               current->variable.isUsed);
+        // varToString(&current->variable));
         current = current->next;
     }
     symbolTable *child = table->firstChild;
@@ -301,4 +301,35 @@ valNode varToValNode(varNode *variable)
         break;
     }
     return node;
+}
+
+symbolTable *createSymbolTable(symbolTable *parent)
+{
+    symbolTable *newTable = (symbolTable *)malloc(sizeof(symbolTable));
+    if (newTable == NULL)
+    {
+        return NULL;
+    }
+    newTable->parent = parent;
+    newTable->variables = NULL;
+    newTable->nextSibling = NULL;
+    newTable->firstChild = NULL;
+
+    if (parent != NULL)
+    {
+        if (parent->firstChild == NULL)
+        {
+            parent->firstChild = newTable;
+        }
+        else
+        {
+            symbolTable *current = parent->firstChild;
+            while (current->nextSibling != NULL)
+            {
+                current = current->nextSibling;
+            }
+            current->nextSibling = newTable;
+        }
+    }
+    return newTable;
 }

@@ -1,14 +1,4 @@
-int x = 5;
-{
-    int x = 4;
-    {
-        int x = 3;
-    }
-}
-{
-    int y = 1;
-}
-{
-    int z = 2;
-    int a = x;
+int i = 0;
+while ( i < 5) {
+    i = i + 1;
 }

@@ -7,6 +7,7 @@
 void yyerror(const char *s);
 int yylex(void);
 char *tempResult(void);
+char *createLabel(void);
 void emit(const char *op, const char *arg1, const char *arg2, const char *result);
 exprResult arithmeticOperations(valNode *left, valNode *right, const char *op);
 exprResult comparisonOperations(valNode *left, valNode *right, const char *op);
@@ -16,9 +17,12 @@ valType currentType = noType;
 symbolTable *currentScope = NULL;
 bool isConstDecl = false;
 int resultCounter = 0;
+int labelsCounter = 0;
 const char *resultQuadFile = "quads.txt";
 FILE *quadFile = NULL;
-
+bool controlFlowScope = false;
+char* startLabel = NULL;
+char* endLabel = NULL;
 
 
 
@@ -57,9 +61,8 @@ FILE *quadFile = NULL;
 %token <sValue> IDENTIFIER
 %token <bValue> BOOLEAN
 %type <exprNode> expr
-
 %token INT FLOAT BOOL CHAR STRING
-%token IF ELSE WHILE FOR SWITCH CASE DO BREAK CONTINUE RETURN DEFAULT
+%token IF ELSE FOR WHILE SWITCH CASE DO BREAK CONTINUE RETURN DEFAULT
 %token PRINT
 %token OR AND NOT
 %token GE LE EQ NE
@@ -123,30 +126,22 @@ BLOCK_STMT_LIST:
 
 BLOCK:
     '{'{
-        symbolTable *newScope = (symbolTable *)malloc(sizeof(symbolTable));
-        if (newScope == NULL) {
-            fprintf(stderr, "Error: Failed to allocate memory for new scope.\n");
-            // exit(1);
-        }
-        if(currentScope->firstChild == NULL) {
-            currentScope->firstChild = newScope;
-        } else {
-            symbolTable *sibling = currentScope->firstChild;
-            while(sibling->nextSibling != NULL) {
-                sibling = sibling->nextSibling;
+        if (!controlFlowScope) {
+            symbolTable *newScope = createSymbolTable(currentScope);
+            if (newScope == NULL) {
+                fprintf(stderr, "Error: Failed to create new scope.\n");
+                // exit(1);
             }
-            sibling->nextSibling = newScope;
+            currentScope = newScope;
         }
-        newScope->parent = currentScope;
-        newScope->variables = NULL;
-        currentScope = newScope;
-        
     } BLOCK_STMT_LIST {
         // symbolTable *temp = currentScope->parent;
         // free(currentScope);
         // currentScope = temp;
         //printf("Exiting scope, returning to parent scope.\n");
-        currentScope = currentScope->parent;
+        if (!controlFlowScope) {
+            currentScope = currentScope->parent;
+        }
     } '}'
     ;
 
@@ -486,9 +481,9 @@ CONST_TYPE:
     ;
 
 stmt:
-      ';'
-    | expr ';'
-    | PRINT '(' expr ')' ';'
+      ';' {}
+    | expr ';' {}
+    | PRINT '(' expr ')' ';' {}
     | TYPE IDENTIFIER ASSIGNMENT CHAINED_DECLARATION ';' {
         bool hasError = false;
         if(isInCurrentScope(currentScope, $2)) {
@@ -540,8 +535,7 @@ stmt:
             currentType = noType;
         }  
     }
-    | IDENTIFIER '=' expr ';'
-    {
+    | IDENTIFIER '=' expr ';' {
         varNode *var = findVariable(currentScope, $1);
         if(!var) {
             fprintf(stderr, "Error: Variable '%s' you can't assign value to variable not declared before \n", $1, currentType);
@@ -555,19 +549,40 @@ stmt:
             }
         }
     }
-    | FUNCTION_CALL ';'
-    | IDENTIFIER INC ';'
-    | IDENTIFIER DEC ';'
-    | BREAK ';'
-    | CONTINUE ';'
-    | RETURN expr ';'
-    | DO stmt WHILE '(' expr ')' ';'
-    | FOR '(' FOR_INIT ';' expr ';' expr_opt ')' stmt
-    | WHILE '(' expr ')' stmt
-    | IF '(' expr ')' stmt %prec IF
-    | IF '(' expr ')' stmt ELSE stmt
-    | SWITCH '(' expr ')' '{' CASE_LIST '}'
-    | BLOCK
+    | FUNCTION_CALL ';' {}
+    | IDENTIFIER INC ';' {}
+    | IDENTIFIER DEC ';' {}
+    | BREAK ';' {}
+    | CONTINUE ';' {}
+    | RETURN expr ';' {}
+    | DO stmt WHILE '(' expr ')' ';' {}
+    | FOR '(' FOR_INIT ';' expr ';' expr_opt ')' stmt {}
+    | WHILE '(' {
+        startLabel = createLabel();
+        endLabel = createLabel();
+        emit("LABEL", NULL, NULL, startLabel);
+    } expr ')' {
+        emit("IF_FALSE", $4.place, NULL, endLabel);
+        controlFlowScope = true;
+        symbolTable *newScope = createSymbolTable(currentScope);
+        if (newScope == NULL) {
+            fprintf(stderr, "Error: Failed to create new scope for 'while' statement.\n");
+            // exit(1);
+        }
+        currentScope = newScope;
+    } stmt {
+        // printf("Exiting 'while' scope, returning to parent scope.\n");
+        currentScope = currentScope->parent;
+        controlFlowScope = false;
+        emit("JMP", NULL, NULL, startLabel);
+        emit("LABEL", NULL, NULL, endLabel);
+        startLabel = NULL;
+        endLabel = NULL;
+    }
+    | IF '(' expr ')' stmt %prec IF {}
+    | IF '(' expr ')' stmt ELSE stmt {}
+    | SWITCH '(' expr ')' '{' CASE_LIST '}' {}
+    | BLOCK {}
     ;
 
 CASE_LIST:
@@ -582,6 +597,12 @@ CASE_LIST:
 char* tempResult(void) {
     char buffer[20];
     sprintf(buffer, "t_%d", resultCounter++);
+    return strdup(buffer);
+}
+
+char* createLabel(void) {
+    char buffer[20];
+    sprintf(buffer, "L_%d", labelsCounter++);
     return strdup(buffer);
 }
 
