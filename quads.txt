@@ -1,3 +1,1 @@
-GT, 5, 3, t_0
-DECL, t_0, NULL, x
-ADD, 5, 6, t_1
+DECL, 3, NULL, x

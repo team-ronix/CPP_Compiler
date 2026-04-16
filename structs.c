@@ -182,8 +182,8 @@ bool editValue(symbolTable *table, const char *id, const valNode *newValue)
             varNode->variable.isInitialized = true;
             return true;
         }
-        
-         if (varNode->variable.type == typeInt && newValue->type == typeBool)
+
+        if (varNode->variable.type == typeInt && newValue->type == typeBool)
         {
             valNode convertedValue;
             convertedValue.type = typeInt;
@@ -200,18 +200,17 @@ bool editValue(symbolTable *table, const char *id, const valNode *newValue)
     return true;
 }
 
-void printSymbolTable(symbolTable *table)
+void printSymbolTable(symbolTable *table, int level)
 {
     if (table == NULL)
     {
-        printf("Symbol table is NULL.\n");
         return;
     }
-    printf("Symbol Table:\n");
+    printf("Symbol Table, level:%d, variables: \n", level);
     varNode *current = table->variables;
     while (current != NULL)
     {
-        printf("Variable ID: %s, Type: %s, Is Const: %d, Is Initialized: %d, Is Used: %d, Value: %s\n",
+        printf("ID: %s | Type: %s | Const: %d | Init: %d | Used: %d | Value: %s\n",
                current->variable.id,
                valTypeToString(current->variable.type),
                current->variable.isConst,
@@ -219,6 +218,12 @@ void printSymbolTable(symbolTable *table)
                current->variable.isUsed,
                varToString(&current->variable));
         current = current->next;
+    }
+    symbolTable *child = table->firstChild;
+    while (child != NULL)
+    {
+        printSymbolTable(child, level + 1);
+        child = child->nextSibling;
     }
 }
 

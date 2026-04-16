@@ -114,9 +114,9 @@ TYPE:
 
 BLOCK_STMT_LIST:
       /* empty */ {
-        symbolTable* temp = currentScope->parent;
+        // symbolTable* temp = currentScope->parent;
         // free(currentScope);
-        currentScope = temp;
+        // currentScope = temp;
     }
     |stmt BLOCK_STMT_LIST
     ;
@@ -128,13 +128,25 @@ BLOCK:
             fprintf(stderr, "Error: Failed to allocate memory for new scope.\n");
             // exit(1);
         }
+        if(currentScope->firstChild == NULL) {
+            currentScope->firstChild = newScope;
+        } else {
+            symbolTable *sibling = currentScope->firstChild;
+            while(sibling->nextSibling != NULL) {
+                sibling = sibling->nextSibling;
+            }
+            sibling->nextSibling = newScope;
+        }
         newScope->parent = currentScope;
         newScope->variables = NULL;
         currentScope = newScope;
+        
     } BLOCK_STMT_LIST {
-        symbolTable *temp = currentScope->parent;
-        free(currentScope);
-        currentScope = temp;
+        // symbolTable *temp = currentScope->parent;
+        // free(currentScope);
+        // currentScope = temp;
+        //printf("Exiting scope, returning to parent scope.\n");
+        currentScope = currentScope->parent;
     } '}'
     ;
 
@@ -722,6 +734,8 @@ int main(void) {
     }
     globalTable->parent = NULL;
     globalTable->variables = NULL;
+    globalTable->nextSibling = NULL;
+    globalTable->firstChild = NULL;
     currentScope = globalTable;
 
     // open the file for writing quads
@@ -731,7 +745,7 @@ int main(void) {
         return 1;
     }
     int parseStatus = yyparse();
-    printSymbolTable(globalTable);
+    printSymbolTable(globalTable, 0);
     fclose(quadFile);
     return parseStatus;
 }

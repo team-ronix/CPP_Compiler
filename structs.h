@@ -72,6 +72,8 @@ typedef struct symbolTable
     // char *id;
     struct symbolTable *parent;
     varNode *variables;
+    struct symbolTable *nextSibling;
+    struct symbolTable *firstChild;
 } symbolTable;
 
 typedef struct exprResult
@@ -80,8 +82,6 @@ typedef struct exprResult
     valNode value;
     char *place;
 } exprResult;
-
-
 
 typedef struct quadruple
 {
@@ -98,7 +98,7 @@ bool removeVariable(symbolTable *table, const char *id);
 void assignValue(varNode *varNode, valNode value, valType type);
 bool editValue(symbolTable *table, const char *id, const valNode *newValue);
 bool isInCurrentScope(symbolTable *table, const char *id);
-void printSymbolTable(symbolTable *table);
+void printSymbolTable(symbolTable *table, int level);
 valNode varToValNode(varNode *variable);
 char *valTypeToString(valType type);
 char *varToString(const var *variable);
