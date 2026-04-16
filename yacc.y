@@ -4,13 +4,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "handlers/arithmetic.h"
+#include "handlers/comparison.h"
+#include "handlers/utils.h"
 void yyerror(const char *s);
 int yylex(void);
 char *tempResult(void);
 char *createLabel(void);
 void emit(const char *op, const char *arg1, const char *arg2, const char *result);
-exprResult arithmeticOperations(valNode *left, valNode *right, const char *op);
-exprResult comparisonOperations(valNode *left, valNode *right, const char *op);
 extern int lineNumber;
 symbolTable *globalTable = NULL;
 valType currentType = noType;
@@ -490,11 +491,18 @@ stmt:
             fprintf(stderr, "Error: Variable '%s' already declared in this scope.\n", $2);
             hasError = true;
         }
+        
         if($3.hasValue) {
             valNode val = $3.val;
             if(val.type != currentType) {
-                fprintf(stderr, "Error: Type mismatch for variable '%s'. Expected type %d but got type %d.\n", $2, currentType, val.type);
-                hasError = true;
+                // check if we can do implicit conversion from int to float or char to int, etc.
+                canConvertResult convRes = canConvert(val.type, currentType);
+                if(convRes.canConvert) {
+                    val = convertValue(val, currentType);
+                } else {
+                    fprintf(stderr, "Error: Type mismatch for variable '%s'. Expected type %d but got type %d.\n", $2, currentType, val.type);
+                    hasError = true;
+                }
             }
             if(!hasError) {
                 printf("Declaring variable '%s' with initial value.\n", $2);
@@ -604,133 +612,6 @@ char* createLabel(void) {
     char buffer[20];
     sprintf(buffer, "L_%d", labelsCounter++);
     return strdup(buffer);
-}
-
-exprResult arithmeticOperations(valNode *left, valNode *right, const char *op) {
-    valNode resultNode;
-    exprResult res;
-    res.error = false;
-
-    if (left->type  != typeInt && left->type  != typeFloat && left->type  != typeChar) {
-        res.error = true;
-        fprintf(stderr, "Error: Unsupported type %d for left operand in '%s'.\n", left->type, op);
-        res.place = NULL;
-        return res;
-    }
-    if (right->type != typeInt && right->type != typeFloat && right->type != typeChar) {
-        res.error = true;
-        fprintf(stderr, "Error: Unsupported type %d for right operand in '%s'.\n", right->type, op);
-        res.place = NULL;
-        return res;
-    }
-
-    // Extract numeric values from any supported type
-    bool leftIsFloat  = (left->type  == typeFloat);
-    bool rightIsFloat = (right->type == typeFloat);
-
-    float lFloat = leftIsFloat  ? left->value.fValue  :
-                     left->type  == typeChar ? (float)(int)left->value.cValue  :
-                     (float)left->value.iValue;
-
-    float rFloat = rightIsFloat ? right->value.fValue :
-                     right->type == typeChar ? (float)(int)right->value.cValue :
-                     (float)right->value.iValue;
-
-    int lInt = leftIsFloat  ? (int)left->value.fValue  :
-               left->type  == typeChar ? (int)left->value.cValue  :
-               left->value.iValue;
-
-    int rInt = rightIsFloat ? (int)right->value.fValue :
-               right->type == typeChar ? (int)right->value.cValue :
-               right->value.iValue;
-
-    // Division by zero check
-    if (strcmp(op, "/") == 0) {
-        if ((leftIsFloat || rightIsFloat) ? (rFloat == 0.0) : (rInt == 0)) {
-            res.error = true;
-            fprintf(stderr, "Error: Division by zero.\n");
-            res.place = NULL;
-            return res;
-        }
-    }
-
-    bool eitherFloat = leftIsFloat || rightIsFloat;
-
-    if (eitherFloat) {
-        resultNode.type = typeFloat;
-        if      (strcmp(op, "+") == 0) resultNode.value.fValue = lFloat + rFloat;
-        else if (strcmp(op, "-") == 0) resultNode.value.fValue = lFloat - rFloat;
-        else if (strcmp(op, "*") == 0) resultNode.value.fValue = lFloat * rFloat;
-        else if (strcmp(op, "/") == 0) resultNode.value.fValue = lFloat / rFloat;
-        else {
-            res.error = true;
-            fprintf(stderr, "Error: Unknown operator '%s'.\n", op);
-            res.place = NULL;
-            return res;
-        }
-    } else {
-        resultNode.type = typeInt;
-        if      (strcmp(op, "+") == 0) resultNode.value.iValue = lInt + rInt;
-        else if (strcmp(op, "-") == 0) resultNode.value.iValue = lInt - rInt;
-        else if (strcmp(op, "*") == 0) resultNode.value.iValue = lInt * rInt;
-        else if (strcmp(op, "/") == 0) resultNode.value.iValue = lInt / rInt;
-        else {
-            res.error = true;
-            fprintf(stderr, "Error: Unknown operator '%s'.\n", op);
-            res.place = NULL;
-            return res;
-        }
-    }
-
-    res.value = resultNode;
-    res.place = strdup(tempResult());
-    return res;
-}
-
-exprResult comparisonOperations(valNode *left, valNode *right, const char *op) {
-    valNode resultNode;
-    exprResult res;
-    res.error = false;
-
-    if (left->type  != typeInt && left->type  != typeFloat && left->type  != typeChar) {
-        res.error = true;
-        fprintf(stderr, "Error: Unsupported type %d for left operand in '%s'.\n", left->type, op);
-        res.place = NULL;
-        return res;
-    }
-    if (right->type != typeInt && right->type != typeFloat && right->type != typeChar) {
-        res.error = true;
-        fprintf(stderr, "Error: Unsupported type %d for right operand in '%s'.\n", right->type, op);
-        res.place = NULL;
-        return res;
-    }
-
-    double lDouble = (left->type  == typeFloat) ? left->value.fValue  :
-                     (left->type  == typeChar)  ? (double)(int)left->value.cValue  :
-                     (double)left->value.iValue;
-
-    double rDouble = (right->type == typeFloat) ? right->value.fValue :
-                     (right->type == typeChar)  ? (double)(int)right->value.cValue :
-                     (double)right->value.iValue;
-
-    resultNode.type = typeBool;
-
-    if      (strcmp(op, "==") == 0) resultNode.value.iValue = (lDouble == rDouble);
-    else if (strcmp(op, "!=") == 0) resultNode.value.iValue = (lDouble != rDouble);
-    else if (strcmp(op, "<")  == 0) resultNode.value.iValue = (lDouble <  rDouble);
-    else if (strcmp(op, ">")  == 0) resultNode.value.iValue = (lDouble >  rDouble);
-    else if (strcmp(op, "<=") == 0) resultNode.value.iValue = (lDouble <= rDouble);
-    else if (strcmp(op, ">=") == 0) resultNode.value.iValue = (lDouble >= rDouble);
-    else {
-        res.error = true;
-        fprintf(stderr, "Error: Unknown comparison operator '%s'.\n", op);
-        res.place = NULL;
-        return res;
-    }
-
-    res.value = resultNode;
-    res.place = strdup(tempResult());
-    return res;
 }
 
 void emit(const char *op, const char *arg1, const char *arg2, const char *result) {
