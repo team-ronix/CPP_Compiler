@@ -67,6 +67,7 @@ Stack switchStack;
 %token <sValue> IDENTIFIER
 %token <bValue> BOOLEAN
 %type <exprNode> expr
+%type <exprNode> for_cond_opt
 %token INT FLOAT BOOL CHAR STRING
 %token IF ELSE FOR WHILE SWITCH CASE DO BREAK CONTINUE RETURN DEFAULT
 %token PRINT
@@ -156,15 +157,65 @@ DEFAULT_VAL:
     ;
 
 FOR_INIT:
-    TYPE IDENTIFIER '=' expr
-    | IDENTIFIER '=' expr
+    TYPE IDENTIFIER '=' expr {
+        if(isInCurrentScope(currentScope, $2)) {
+            fprintf(stderr, "Error: Variable '%s' already declared in this scope.\n", $2);
+        } else {
+            emit("DECL", $4.place, NULL, $2);
+            addVariableWithValue(currentScope, $2, currentType, false, $4.val);
+        }
+        currentType = noType;
+    }
+    | IDENTIFIER '=' expr {
+        varNode *var = findVariable(currentScope, $1);
+        if(!var) {
+            fprintf(stderr, "Error: Variable '%s' you can't assign value to variable not declared before \n", $1);
+        } else {
+            if(!editValue(currentScope, $1, &$3.val)) {
+                fprintf(stderr, "Error: Failed to assign value to variable '%s'.\n", $1);
+            } else {
+                emit("=", $3.place, NULL, $1);
+                var->variable.isInitialized = true;
+            }
+        }
+    }
     | /* empty */
+;
+
+for_cond_opt:
+      /* empty */ {
+        valNode node;
+        node.type = typeBool;
+        node.value.bValue = true;
+        $$.place = strdup("true");
+        $$.val = node;
+      }
+    | expr {
+        $$ = $1;
+    }
 ;
 
 expr_opt:
       /* empty */
-    |IDENTIFIER INC
-    | IDENTIFIER DEC
+    | IDENTIFIER INC {
+        handleIncDec(currentScope, $1, "INC");
+    }
+    | IDENTIFIER DEC {
+        handleIncDec(currentScope, $1, "DEC");
+    }
+    | IDENTIFIER '=' expr {
+        varNode *var = findVariable(currentScope, $1);
+        if(!var) {
+            fprintf(stderr, "Error: Variable '%s' you can't assign value to variable not declared before \n", $1);
+        } else {
+            if(!editValue(currentScope, $1, &$3.val)) {
+                fprintf(stderr, "Error: Failed to assign value to variable '%s'.\n", $1);
+            }else {
+                emit("=", $3.place, NULL, $1);
+                var->variable.isInitialized = true;
+            }
+        }
+    }
     | expr
 ;
 
@@ -499,6 +550,13 @@ stmt:
     | if_else
     ;
 
+unscoped_stmt:
+      '{' BLOCK_STMT_LIST '}'
+    | single_if
+    | if_else
+    | unbraced_stmt
+    ;
+
 switch_prefix:
     SWITCH '(' expr ')' {
         enterScope();
@@ -581,7 +639,7 @@ unbraced_stmt:
     | IDENTIFIER '=' expr ';' {
         varNode *var = findVariable(currentScope, $1);
         if(!var) {
-            fprintf(stderr, "Error: Variable '%s' you can't assign value to variable not declared before \n", $1, currentType);
+            fprintf(stderr, "Error: Variable '%s' you can't assign value to variable not declared before \n", $1);
             // exit(1);
         } else {
             if(!editValue(currentScope, $1, &$3.val)) {
@@ -589,6 +647,7 @@ unbraced_stmt:
                 // exit(1);
             }else {
                 emit("=", $3.place, NULL, $1);
+                var->variable.isInitialized = true;
             }
         }
     }
@@ -623,14 +682,49 @@ unbraced_stmt:
         currentScope->endLabel = createLabel();
         currentScope->isLoopScope = true;
         emit("LABEL", NULL, NULL, currentScope->starLabel);
-    } BLOCK WHILE '(' expr ')'{
+    } unscoped_stmt WHILE '(' expr ')'{
         emit("IF_FALSE", $6.place, NULL, currentScope->endLabel);
     } ';' {
         emit("JMP", NULL, NULL, currentScope->starLabel);
         emit("LABEL", NULL, NULL, currentScope->endLabel);
         exitScope();
     }
-    | FOR '(' FOR_INIT ';' expr ';' expr_opt ')' stmt {}
+    | FOR '(' {
+        enterScope();
+    } FOR_INIT ';' {
+        char *l_start = createLabel();
+        emit("LABEL", NULL, NULL, l_start);
+        $<sValue>$ = l_start;
+    } for_cond_opt ';' {
+        char *l_body = createLabel();
+        char *l_end = createLabel();
+        char *l_inc = createLabel();
+        
+        currentScope->isLoopScope = true;
+        currentScope->starLabel = l_inc;
+        currentScope->endLabel = l_end;
+        
+        emit("IF_FALSE", $7.place, NULL, l_end);
+        emit("JMP", NULL, NULL, l_body);
+        emit("LABEL", NULL, NULL, l_inc);
+        
+        IfLabelStorage *forLabels = malloc(sizeof(IfLabelStorage));
+        forLabels->elseLabel = l_body;
+        forLabels->endLabel = $<sValue>6;
+        $<sValue>$ = (char *)forLabels;
+    } expr_opt ')' {
+        IfLabelStorage *forLabels = (IfLabelStorage *)$<sValue>9;
+        emit("JMP", NULL, NULL, forLabels->endLabel);
+        emit("LABEL", NULL, NULL, forLabels->elseLabel);
+        $<sValue>$ = (char *)forLabels;
+    } unscoped_stmt {
+        emit("JMP", NULL, NULL, currentScope->starLabel);
+        emit("LABEL", NULL, NULL, currentScope->endLabel);
+        
+        IfLabelStorage *forLabels = (IfLabelStorage *)$<sValue>12;
+        free(forLabels);
+        exitScope();
+    }
     | WHILE '(' {
         enterScope();
         currentScope->starLabel = createLabel();
@@ -639,7 +733,7 @@ unbraced_stmt:
         emit("LABEL", NULL, NULL, currentScope->starLabel);
     } expr ')' {
         emit("IF_FALSE", $4.place, NULL, currentScope->endLabel);
-    } BLOCK {
+    } unscoped_stmt {
         emit("JMP", NULL, NULL, currentScope->starLabel);
         emit("LABEL", NULL, NULL, currentScope->endLabel);
         exitScope();
