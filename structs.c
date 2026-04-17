@@ -303,13 +303,14 @@ valNode varToValNode(varNode *variable)
     return node;
 }
 
-symbolTable *createSymbolTable(symbolTable *parent)
+symbolTable *createSymbolTable(symbolTable *parent, char *id)
 {
     symbolTable *newTable = (symbolTable *)malloc(sizeof(symbolTable));
     if (newTable == NULL)
     {
         return NULL;
     }
+    newTable->id = strdup(id);
     newTable->parent = parent;
     newTable->variables = NULL;
     newTable->nextSibling = NULL;

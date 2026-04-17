@@ -8,3 +8,7 @@ while ( i < 5) {
     int z = 4;
 }
 int m = 4;
+
+while (6) {
+    int x = 5;
+}

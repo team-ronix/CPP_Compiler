@@ -11,6 +11,7 @@ void yyerror(const char *s);
 int yylex(void);
 char *tempResult(void);
 char *createLabel(void);
+char *createSymbolTableId(void);
 void emit(const char *op, const char *arg1, const char *arg2, const char *result);
 extern int lineNumber;
 symbolTable *globalTable = NULL;
@@ -21,10 +22,10 @@ int resultCounter = 0;
 int labelsCounter = 0;
 const char *resultQuadFile = "quads.txt";
 FILE *quadFile = NULL;
-bool controlFlowScope = false;
 char* startLabel = NULL;
 char* endLabel = NULL;
 Stack loopStack;
+int symbolTableCounter = 0;
 
 
 
@@ -129,22 +130,18 @@ BLOCK_STMT_LIST:
 
 BLOCK:
     '{'{
-        if (!controlFlowScope) {
-            symbolTable *newScope = createSymbolTable(currentScope);
-            if (newScope == NULL) {
-                fprintf(stderr, "Error: Failed to create new scope.\n");
-                // exit(1);
-            }
-            currentScope = newScope;
+        symbolTable *newScope = createSymbolTable(currentScope, createSymbolTableId());
+        if (newScope == NULL) {
+            fprintf(stderr, "Error: Failed to create new scope.\n");
+            // exit(1);
         }
+        currentScope = newScope;
     } BLOCK_STMT_LIST {
         // symbolTable *temp = currentScope->parent;
         // free(currentScope);
         // currentScope = temp;
         //printf("Exiting scope, returning to parent scope.\n");
-        if (!controlFlowScope) {
-            currentScope = currentScope->parent;
-        }
+        currentScope = currentScope->parent;
     } '}'
     ;
 
@@ -206,7 +203,7 @@ CHAINED_DECLARATION:
         }
         if($3.hasValue) {
             
-            printf("Declaring variable '%s' with initial value.\n", $2);
+            // printf("Declaring variable '%s' with initial value.\n", $2);
             valNode val = $3.val;
             if(val.type != currentType) {
                 fprintf(stderr, "Error: Type mismatch for variable '%s'. Expected type %d but got type %d.\n", $2, currentType, val.type);
@@ -224,7 +221,7 @@ CHAINED_DECLARATION:
                 fprintf(stderr, "Error: Constant variable '%s' must be initialized.\n", $2);
                 // exit(1);
             }
-            printf("Declaring variable '%s' without initial value.\n", $2);
+            // printf("Declaring variable '%s' without initial value.\n", $2);
             emit("DECL", NULL, NULL, $2);
             addVariable(currentScope, $2, currentType);
         }
@@ -507,13 +504,13 @@ stmt:
                 }
             }
             if(!hasError) {
-                printf("Declaring variable '%s' with initial value.\n", $2);
+                // printf("Declaring variable '%s' with initial value.\n", $2);
                 emit("DECL", $3.place, NULL, $2);
                 addVariableWithValue(currentScope, $2, currentType, false, $3.val);      
             }
         }
         else {
-            printf("Declaring variable '%s' without initial value.\n", $2);
+            // printf("Declaring variable '%s' without initial value.\n", $2);
             emit("DECL", NULL, NULL, $2);
             addVariable(currentScope, $2, currentType);
         }
@@ -565,14 +562,35 @@ stmt:
     | BREAK ';' {}
     | CONTINUE ';' {}
     | RETURN expr ';' {}
-    | DO stmt WHILE '(' expr ')' ';' {}
+    | DO {
+        symbolTable *newScope = createSymbolTable(currentScope, createSymbolTableId());
+        if (newScope == NULL) {
+            fprintf(stderr, "Error: Failed to create new scope for 'do-while' statement.\n");
+            // exit(1);
+        }
+        // printf("Scope %s, entering new scope %s for 'do-while' statement.\n", currentScope->id, newScope->id);
+        currentScope = newScope;
+        stackPush(&loopStack, currentScope);
+        currentScope->starLabel = createLabel();
+        currentScope->endLabel = createLabel();
+        emit("LABEL", NULL, NULL, currentScope->starLabel);
+    } stmt WHILE '(' expr ')'{
+        emit("IF_FALSE", $6.place, NULL, currentScope->endLabel);
+    } ';' {
+        symbolTable *labelsScope = (symbolTable *)stackPop(&loopStack);
+        currentScope = currentScope->parent;
+        printf("Exiting scope %s, returning to parent scope %s.\n", labelsScope->id, currentScope->id);
+        emit("JMP", NULL, NULL, labelsScope->starLabel);
+        emit("LABEL", NULL, NULL, labelsScope->endLabel);
+    }
     | FOR '(' FOR_INIT ';' expr ';' expr_opt ')' stmt {}
     | WHILE '(' {
-        symbolTable *newScope = createSymbolTable(currentScope);
+        symbolTable *newScope = createSymbolTable(currentScope, createSymbolTableId());
         if (newScope == NULL) {
             fprintf(stderr, "Error: Failed to create new scope for 'while' statement.\n");
             // exit(1);
         }
+        printf("Scope %s, entering new scope %s for 'while' statement.\n", currentScope->id, newScope->id);
         currentScope = newScope;
         stackPush(&loopStack, currentScope);
         currentScope->starLabel = createLabel();
@@ -580,13 +598,12 @@ stmt:
         emit("LABEL", NULL, NULL, currentScope->starLabel);
     } expr ')' {
         emit("IF_FALSE", $4.place, NULL, currentScope->endLabel);
-        controlFlowScope = true;
     } stmt {
         symbolTable *labelsScope = (symbolTable *)stackPop(&loopStack);
-        currentScope = labelsScope;
+        currentScope = currentScope->parent;
+        printf("Exiting scope %s, returning to parent scope %s.\n", labelsScope->id, currentScope->id);
         emit("JMP", NULL, NULL, labelsScope->starLabel);
         emit("LABEL", NULL, NULL, labelsScope->endLabel);
-        controlFlowScope = false;
     }
     | IF '(' expr ')' stmt %prec IF {}
     | IF '(' expr ')' stmt ELSE stmt {}
@@ -615,6 +632,12 @@ char* createLabel(void) {
     return strdup(buffer);
 }
 
+char *createSymbolTableId(void) {
+    char buffer[50];
+    sprintf(buffer, "S_%d", symbolTableCounter++);
+    return strdup(buffer);
+}
+
 void emit(const char *op, const char *arg1, const char *arg2, const char *result) {
     if (quadFile == NULL) {
         fprintf(stderr, "Error: quad file is not open\n");
@@ -635,6 +658,7 @@ int main(void) {
         fprintf(stderr, "Error: Failed to allocate global symbol table.\n");
         return 1;
     }
+    globalTable->id = createSymbolTableId();
     globalTable->parent = NULL;
     globalTable->variables = NULL;
     globalTable->nextSibling = NULL;

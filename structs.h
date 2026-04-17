@@ -69,7 +69,7 @@ typedef struct varNode
 
 typedef struct symbolTable
 {
-    // char *id;
+    char *id;
     struct symbolTable *parent;
     varNode *variables;
     struct symbolTable *nextSibling;
@@ -104,5 +104,5 @@ void printSymbolTable(symbolTable *table, int level);
 valNode varToValNode(varNode *variable);
 char *valTypeToString(valType type);
 char *varToString(const var *variable);
-symbolTable *createSymbolTable(symbolTable *parent);
+symbolTable *createSymbolTable(symbolTable *parent, char *id);
 #endif
