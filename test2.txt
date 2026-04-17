@@ -1,14 +1,5 @@
-int i = 0;
-while ( i < 5) {
-    i = i + 1;
-    int y = 4;
-    while ( y > 0) {
-        y = y - 1;
-    }
-    int z = 4;
-}
-int m = 4;
+int x = 3;
 
-while (6) {
-    int x = 5;
+while (x > 0) {
+    x--;
 }

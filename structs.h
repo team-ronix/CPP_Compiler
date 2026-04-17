@@ -67,6 +67,8 @@ typedef struct varNode
     struct symbolTable *scope;
 } varNode;
 
+
+
 typedef struct symbolTable
 {
     char *id;
@@ -74,6 +76,7 @@ typedef struct symbolTable
     varNode *variables;
     struct symbolTable *nextSibling;
     struct symbolTable *firstChild;
+    bool isLoopScope;
     char *starLabel;
     char *endLabel;
 } symbolTable;
@@ -101,8 +104,9 @@ void assignValue(varNode *varNode, valNode value, valType type);
 bool editValue(symbolTable *table, const char *id, const valNode *newValue);
 bool isInCurrentScope(symbolTable *table, const char *id);
 void printSymbolTable(symbolTable *table, int level);
+symbolTable *findNearestLoopScope(symbolTable *table);
 valNode varToValNode(varNode *variable);
 char *valTypeToString(valType type);
 char *varToString(const var *variable);
-symbolTable *createSymbolTable(symbolTable *parent, char *id);
+symbolTable *createSymbolTable(symbolTable *parent);
 #endif

@@ -303,8 +303,26 @@ valNode varToValNode(varNode *variable)
     return node;
 }
 
-symbolTable *createSymbolTable(symbolTable *parent, char *id)
+symbolTable *findNearestLoopScope(symbolTable *table)
 {
+    while (table != NULL)
+    {
+        if (table->isLoopScope)
+        {
+            printf("Found loop scope: %s\n", table->id);
+            return table;
+        }
+        table = table->parent;
+    }
+    return NULL;
+}
+
+symbolTable *createSymbolTable(symbolTable *parent)
+{
+    static int counter = 0;
+    char id[50];
+    sprintf(id, "S_%d", counter++);
+
     symbolTable *newTable = (symbolTable *)malloc(sizeof(symbolTable));
     if (newTable == NULL)
     {
@@ -315,6 +333,7 @@ symbolTable *createSymbolTable(symbolTable *parent, char *id)
     newTable->variables = NULL;
     newTable->nextSibling = NULL;
     newTable->firstChild = NULL;
+    newTable->isLoopScope = false;
 
     if (parent != NULL)
     {

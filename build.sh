@@ -1,6 +1,6 @@
 #!/bin/bash
 
-yacc -d yacc.y || { echo "Yacc failed"; exit 1; }
+yacc -d yacc.y -Wcounterexamples || { echo "Yacc failed"; exit 1; }
 
 lex lex.l || { echo "Lex failed"; exit 1; }
 

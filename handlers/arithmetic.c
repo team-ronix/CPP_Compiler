@@ -4,6 +4,7 @@
 #include <string.h>
 
 extern char *tempResult(void);
+extern void emit(const char *op, const char *arg1, const char *arg2, const char *result);
 
 exprResult arithmeticOperations(valNode *left, valNode *right, const char *op) {
     valNode resultNode;
@@ -82,4 +83,25 @@ exprResult arithmeticOperations(valNode *left, valNode *right, const char *op) {
     res.value = resultNode;
     res.place = strdup(tempResult());
     return res;
+}
+
+void handleIncDec(symbolTable *scope, const char *id, const char *op) {
+    varNode *var = findVariable(scope, id);
+    if (!var) {
+        fprintf(stderr, "Error: Variable '%s' not declared.\n", id);
+        return;
+    }
+    if (var->variable.isConst) {
+        fprintf(stderr, "Error: Cannot %s constant variable '%s'.\n",
+                strcmp(op, "INC") == 0 ? "increment" : "decrement", id);
+        return;
+    }
+    valNode one;
+    one.type = typeInt;
+    one.value.iValue = 1;
+    emit(op, NULL, NULL, id);
+    if (!editValue(scope, id, &one)) {
+        fprintf(stderr, "Error: Failed to %s variable '%s'.\n",
+                strcmp(op, "INC") == 0 ? "increment" : "decrement", id);
+    }
 }

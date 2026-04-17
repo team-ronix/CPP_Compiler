@@ -11,7 +11,8 @@ void yyerror(const char *s);
 int yylex(void);
 char *tempResult(void);
 char *createLabel(void);
-char *createSymbolTableId(void);
+void enterScope(void);
+void exitScope(void);
 void emit(const char *op, const char *arg1, const char *arg2, const char *result);
 extern int lineNumber;
 symbolTable *globalTable = NULL;
@@ -25,7 +26,6 @@ FILE *quadFile = NULL;
 char* startLabel = NULL;
 char* endLabel = NULL;
 Stack loopStack;
-int symbolTableCounter = 0;
 
 
 
@@ -129,20 +129,7 @@ BLOCK_STMT_LIST:
     ;
 
 BLOCK:
-    '{'{
-        symbolTable *newScope = createSymbolTable(currentScope, createSymbolTableId());
-        if (newScope == NULL) {
-            fprintf(stderr, "Error: Failed to create new scope.\n");
-            // exit(1);
-        }
-        currentScope = newScope;
-    } BLOCK_STMT_LIST {
-        // symbolTable *temp = currentScope->parent;
-        // free(currentScope);
-        // currentScope = temp;
-        //printf("Exiting scope, returning to parent scope.\n");
-        currentScope = currentScope->parent;
-    } '}'
+    '{' BLOCK_STMT_LIST '}'
     ;
 
 PARAM_LIST:
@@ -557,58 +544,94 @@ stmt:
         }
     }
     | FUNCTION_CALL ';' {}
-    | IDENTIFIER INC ';' {}
-    | IDENTIFIER DEC ';' {}
-    | BREAK ';' {}
-    | CONTINUE ';' {}
+    | IDENTIFIER INC ';' {
+        handleIncDec(currentScope, $1, "INC");
+    }
+    | IDENTIFIER DEC ';' {
+        handleIncDec(currentScope, $1, "DEC");
+    }
+    | BREAK ';' {
+        // TODO check for switch case as well
+        symbolTable *loopScope = findNearestLoopScope(currentScope);
+        if (loopScope == NULL) {
+            fprintf(stderr, "Error: 'break' statement not within a loop.\n");
+        } else {
+            emit("JMP_BREAK", NULL, NULL, loopScope->endLabel);
+        }
+    }
+    | CONTINUE ';' {
+        symbolTable *loopScope = findNearestLoopScope(currentScope);
+        if (loopScope == NULL) {
+            fprintf(stderr, "Error: 'continue' statement not within a loop.\n");
+        } else {
+            emit("JMP_CONTINUE", NULL, NULL, loopScope->starLabel);
+        }
+    }
     | RETURN expr ';' {}
     | DO {
-        symbolTable *newScope = createSymbolTable(currentScope, createSymbolTableId());
-        if (newScope == NULL) {
-            fprintf(stderr, "Error: Failed to create new scope for 'do-while' statement.\n");
-            // exit(1);
-        }
-        // printf("Scope %s, entering new scope %s for 'do-while' statement.\n", currentScope->id, newScope->id);
-        currentScope = newScope;
-        stackPush(&loopStack, currentScope);
+        enterScope();
         currentScope->starLabel = createLabel();
         currentScope->endLabel = createLabel();
+        currentScope->isLoopScope = true;
         emit("LABEL", NULL, NULL, currentScope->starLabel);
-    } stmt WHILE '(' expr ')'{
+    } BLOCK WHILE '(' expr ')'{
         emit("IF_FALSE", $6.place, NULL, currentScope->endLabel);
     } ';' {
-        symbolTable *labelsScope = (symbolTable *)stackPop(&loopStack);
-        currentScope = currentScope->parent;
-        printf("Exiting scope %s, returning to parent scope %s.\n", labelsScope->id, currentScope->id);
-        emit("JMP", NULL, NULL, labelsScope->starLabel);
-        emit("LABEL", NULL, NULL, labelsScope->endLabel);
+        emit("JMP", NULL, NULL, currentScope->starLabel);
+        emit("LABEL", NULL, NULL, currentScope->endLabel);
+        exitScope();
     }
     | FOR '(' FOR_INIT ';' expr ';' expr_opt ')' stmt {}
     | WHILE '(' {
-        symbolTable *newScope = createSymbolTable(currentScope, createSymbolTableId());
-        if (newScope == NULL) {
-            fprintf(stderr, "Error: Failed to create new scope for 'while' statement.\n");
-            // exit(1);
-        }
-        printf("Scope %s, entering new scope %s for 'while' statement.\n", currentScope->id, newScope->id);
-        currentScope = newScope;
-        stackPush(&loopStack, currentScope);
+        enterScope();
         currentScope->starLabel = createLabel();
         currentScope->endLabel = createLabel();
+        currentScope->isLoopScope = true;
         emit("LABEL", NULL, NULL, currentScope->starLabel);
     } expr ')' {
         emit("IF_FALSE", $4.place, NULL, currentScope->endLabel);
-    } stmt {
-        symbolTable *labelsScope = (symbolTable *)stackPop(&loopStack);
-        currentScope = currentScope->parent;
-        printf("Exiting scope %s, returning to parent scope %s.\n", labelsScope->id, currentScope->id);
-        emit("JMP", NULL, NULL, labelsScope->starLabel);
-        emit("LABEL", NULL, NULL, labelsScope->endLabel);
+    } BLOCK {
+        emit("JMP", NULL, NULL, currentScope->starLabel);
+        emit("LABEL", NULL, NULL, currentScope->endLabel);
+        exitScope();
     }
-    | IF '(' expr ')' stmt %prec IF {}
-    | IF '(' expr ')' stmt ELSE stmt {}
+    | IF '(' expr ')' {
+        enterScope();
+        char *endIfLabel = createLabel();
+        currentScope->endLabel = endIfLabel;
+
+        enterScope();
+        char *elseLabel = createLabel();
+        currentScope->endLabel = elseLabel;
+        emit("IF_FALSE", $3.place, NULL, elseLabel);
+    } BLOCK {
+        
+        emit("LABEL", NULL, NULL, currentScope->endLabel);
+        exitScope();
+
+        char *endIfLabel = currentScope->endLabel;
+        emit("JMP", NULL, NULL, endIfLabel);
+    } ELSE {
+        enterScope();
+    } BLOCK {
+        exitScope();
+        char *endIfLabel = currentScope->endLabel;
+        emit("JMP", NULL, NULL, endIfLabel);
+    }
+    | IF '(' expr ')' {
+        enterScope();
+        currentScope->endLabel = createLabel();
+        emit("IF_FALSE", $3.place, NULL, currentScope->endLabel);
+    } BLOCK {
+        emit("LABEL", NULL, NULL, currentScope->endLabel);
+        exitScope();
+    } %prec IF
     | SWITCH '(' expr ')' '{' CASE_LIST '}' {}
-    | BLOCK {}
+    | {
+        enterScope();
+    } BLOCK {
+        exitScope();
+    }
     ;
 
 CASE_LIST:
@@ -632,12 +655,6 @@ char* createLabel(void) {
     return strdup(buffer);
 }
 
-char *createSymbolTableId(void) {
-    char buffer[50];
-    sprintf(buffer, "S_%d", symbolTableCounter++);
-    return strdup(buffer);
-}
-
 void emit(const char *op, const char *arg1, const char *arg2, const char *result) {
     if (quadFile == NULL) {
         fprintf(stderr, "Error: quad file is not open\n");
@@ -651,18 +668,26 @@ void yyerror(const char *s) {
     fprintf(stderr, "Syntax error: %s\n", s);
 }
 
+void enterScope(void) {
+    symbolTable *newScope = createSymbolTable(currentScope);
+    if (newScope == NULL) {
+        fprintf(stderr, "Error: Failed to create new scope.\n");
+        return;
+    }
+    currentScope = newScope;
+}
+
+void exitScope(void) {
+    currentScope = currentScope->parent;
+}
+
 int main(void) {
-    globalTable = (symbolTable *)malloc(sizeof(symbolTable));
+    globalTable = createSymbolTable(NULL);
 
     if (globalTable == NULL) {
         fprintf(stderr, "Error: Failed to allocate global symbol table.\n");
         return 1;
     }
-    globalTable->id = createSymbolTableId();
-    globalTable->parent = NULL;
-    globalTable->variables = NULL;
-    globalTable->nextSibling = NULL;
-    globalTable->firstChild = NULL;
     currentScope = globalTable;
     stackInit(&loopStack);
 
