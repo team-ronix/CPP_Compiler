@@ -24,6 +24,7 @@ FILE *quadFile = NULL;
 bool controlFlowScope = false;
 char* startLabel = NULL;
 char* endLabel = NULL;
+Stack loopStack;
 
 
 
@@ -573,6 +574,7 @@ stmt:
             // exit(1);
         }
         currentScope = newScope;
+        stackPush(&loopStack, currentScope);
         currentScope->starLabel = createLabel();
         currentScope->endLabel = createLabel();
         emit("LABEL", NULL, NULL, currentScope->starLabel);
@@ -580,11 +582,11 @@ stmt:
         emit("IF_FALSE", $4.place, NULL, currentScope->endLabel);
         controlFlowScope = true;
     } stmt {
-        // printf("Exiting 'while' scope, returning to parent scope.\n");
-        emit("JMP", NULL, NULL, currentScope->starLabel);
-        emit("LABEL", NULL, NULL, currentScope->endLabel);
+        symbolTable *labelsScope = (symbolTable *)stackPop(&loopStack);
+        currentScope = labelsScope;
+        emit("JMP", NULL, NULL, labelsScope->starLabel);
+        emit("LABEL", NULL, NULL, labelsScope->endLabel);
         controlFlowScope = false;
-        currentScope = currentScope->parent;
     }
     | IF '(' expr ')' stmt %prec IF {}
     | IF '(' expr ')' stmt ELSE stmt {}
@@ -638,6 +640,7 @@ int main(void) {
     globalTable->nextSibling = NULL;
     globalTable->firstChild = NULL;
     currentScope = globalTable;
+    stackInit(&loopStack);
 
     // open the file for writing quads
     quadFile = fopen(resultQuadFile, "w");

@@ -10,5 +10,9 @@ GT, y, 0, t_2
 IF_FALSE, t_2, NULL, L_3
 SUB, y, 1, t_3
 =, t_3, NULL, y
+JMP, NULL, NULL, L_2
+LABEL, NULL, NULL, L_3
+DECL, 4, NULL, z
 JMP, NULL, NULL, L_0
 LABEL, NULL, NULL, L_1
+DECL, 4, NULL, m

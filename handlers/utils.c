@@ -1,5 +1,50 @@
 #include "utils.h"
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+void stackInit(Stack *s) {
+    s->data     = malloc(STACK_INITIAL_CAPACITY * sizeof(void *));
+    s->top      = -1;
+    s->capacity = s->data ? STACK_INITIAL_CAPACITY : 0;
+}
+
+void stackFree(Stack *s) {
+    free(s->data);
+    s->data     = NULL;
+    s->top      = -1;
+    s->capacity = 0;
+}
+
+int stackPush(Stack *s, void *element) {
+    if (s->top + 1 >= s->capacity) {
+        int      newCap  = s->capacity * 2;
+        void   **newData = realloc(s->data, newCap * sizeof(void *));
+        if (!newData) return 0;
+        s->data     = newData;
+        s->capacity = newCap;
+    }
+    s->data[++s->top] = element;
+    return 1;
+}
+
+void *stackPop(Stack *s) {
+    if (s->top < 0) return NULL;
+    return s->data[s->top--];
+}
+
+void *stackPeek(const Stack *s) {
+    if (s->top < 0) return NULL;
+    return s->data[s->top];
+}
+
+int stackIsEmpty(const Stack *s) {
+    return s->top < 0;
+}
+
+int stackSize(const Stack *s) {
+    return s->top + 1;
+}
 
 canConvertResult canConvert(valType from, valType to) {
     canConvertResult res;
