@@ -81,8 +81,6 @@ Stack loopStack;
 %left OR
 %right NOT
 %nonassoc UMINUS
-%nonassoc IF
-%nonassoc ELSE
 
 %start program
 
@@ -467,6 +465,19 @@ CONST_TYPE:
     CONST {isConstDecl = true;}
     ;
 
+if_prefix:
+    IF '(' expr ')' {
+        enterScope();
+        char *endIfLabel = createLabel();
+        currentScope->endLabel = endIfLabel;
+
+        enterScope();
+        char *startOfElseLabel = createLabel();
+        currentScope->endLabel = startOfElseLabel;
+        emit("IF_FALSE", $3.place, NULL, startOfElseLabel);
+    }
+    ;
+
 stmt:
       ';' {}
     | expr ';' {}
@@ -595,37 +606,26 @@ stmt:
         emit("LABEL", NULL, NULL, currentScope->endLabel);
         exitScope();
     }
-    | IF '(' expr ')' {
-        enterScope();
-        char *endIfLabel = createLabel();
-        currentScope->endLabel = endIfLabel;
-
-        enterScope();
-        char *elseLabel = createLabel();
-        currentScope->endLabel = elseLabel;
-        emit("IF_FALSE", $3.place, NULL, elseLabel);
-    } BLOCK {
-        
-        emit("LABEL", NULL, NULL, currentScope->endLabel);
+    | if_prefix BLOCK {
+        char *elseLabel = currentScope->endLabel;
         exitScope();
-
-        char *endIfLabel = currentScope->endLabel;
+        emit("LABEL", NULL, NULL, elseLabel);
+        exitScope();
+    }
+    | if_prefix BLOCK {
+        char *endIfLabel = currentScope->parent->endLabel;
         emit("JMP", NULL, NULL, endIfLabel);
     } ELSE {
+        char *startOfElseLabel = currentScope->endLabel;
+        emit("LABEL", NULL, NULL, startOfElseLabel);
+        exitScope();
         enterScope();
     } BLOCK {
         exitScope();
-        char *endIfLabel = currentScope->endLabel;
-        emit("JMP", NULL, NULL, endIfLabel);
-    }
-    | IF '(' expr ')' {
-        enterScope();
-        currentScope->endLabel = createLabel();
-        emit("IF_FALSE", $3.place, NULL, currentScope->endLabel);
-    } BLOCK {
         emit("LABEL", NULL, NULL, currentScope->endLabel);
         exitScope();
-    } %prec IF
+    }
+    
     | SWITCH '(' expr ')' '{' CASE_LIST '}' {}
     | {
         enterScope();
