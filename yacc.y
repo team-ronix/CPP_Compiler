@@ -136,6 +136,8 @@ BLOCK:
 
 branch_stmt:
       '{' { enterScope(); } BLOCK_STMT_LIST '}' { exitScope(); }
+    | single_if
+    | if_else
     | { enterScope(); } unbraced_stmt { exitScope(); }
     ;
 
@@ -504,6 +506,8 @@ if_else: if_prefix branch_stmt ELSE {
 stmt:
       unbraced_stmt
     | '{' { enterScope(); } BLOCK_STMT_LIST '}' { exitScope(); }
+    | single_if
+    | if_else
     ;
 
 unbraced_stmt:
@@ -634,9 +638,6 @@ unbraced_stmt:
         emit("LABEL", NULL, NULL, currentScope->endLabel);
         exitScope();
     }
-
-    | single_if
-    | if_else
     
     | SWITCH '(' expr ')' '{' CASE_LIST '}' {}
     ;
