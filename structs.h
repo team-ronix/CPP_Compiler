@@ -116,4 +116,9 @@ typedef struct {
     char *endLabel;
 } IfLabelStorage;
 
+typedef struct {
+    char *switchExpr;
+    char *matchedVar;
+} SwitchStorage;
+
 #endif

@@ -27,6 +27,7 @@ char* startLabel = NULL;
 char* endLabel = NULL;
 Stack loopStack;
 Stack labelsStack;
+Stack switchStack;
 
 
 
@@ -103,14 +104,6 @@ top_level_item:
       stmt
     | FUNCTION
 ;
-
-
-stmt_list:
-      stmt
-    | stmt_list stmt
-    ;
-
-
 
 TYPE:
     INT {currentType = typeInt;}
@@ -510,6 +503,23 @@ stmt:
     | if_else
     ;
 
+switch_prefix:
+    SWITCH '(' expr ')' {
+        enterScope();
+        currentScope->starLabel = NULL;
+        currentScope->endLabel = createLabel();
+        currentScope->isLoopScope = true;
+
+        SwitchStorage *sw = malloc(sizeof(SwitchStorage));
+        sw->switchExpr = strdup($3.place);
+        sw->matchedVar = tempResult();
+        
+        emit("=", "false", NULL, sw->matchedVar);
+        
+        stackPush(&switchStack, sw);
+    }
+    ;
+
 unbraced_stmt:
       ';' {}
     | expr ';' {}
@@ -639,12 +649,51 @@ unbraced_stmt:
         exitScope();
     }
     
-    | SWITCH '(' expr ')' '{' CASE_LIST '}' {}
+    | switch_prefix '{' CASE_LIST '}' {
+        emit("LABEL", NULL, NULL, currentScope->endLabel);
+        exitScope();
+        
+        SwitchStorage *sw = (SwitchStorage *)stackPop(&switchStack);
+        free(sw->switchExpr);
+        free(sw);
+    }
     ;
 
 CASE_LIST:
-        CASE expr ':' stmt_list CASE_LIST
-    | DEFAULT ':' stmt_list
+      CASE_ITEM CASE_LIST
+    | DEFAULT_ITEM
+    | /* empty */
+    ;
+
+CASE_ITEM:
+    CASE expr ':' {
+        SwitchStorage *sw = (SwitchStorage *)stackPeek(&switchStack);
+        char *l_cond_test = createLabel();
+        char *l_body      = createLabel();
+        char *l_next_case = createLabel();
+        
+        // If already matched, jump directly to body
+        emit("IF_FALSE", sw->matchedVar, NULL, l_cond_test);
+        emit("JMP", NULL, NULL, l_body);
+        
+        // Label for condition test
+        emit("LABEL", NULL, NULL, l_cond_test);
+        char *cmpRes = tempResult();
+        emit("EQ", sw->switchExpr, $2.place, cmpRes);
+        emit("IF_FALSE", cmpRes, NULL, l_next_case);
+        
+        // Cond matched! Set flag
+        emit("=", "true", NULL, sw->matchedVar);
+        
+        emit("LABEL", NULL, NULL, l_body);
+        $<sValue>$ = l_next_case;
+    } BLOCK_STMT_LIST {
+        emit("LABEL", NULL, NULL, $<sValue>4);
+    }
+    ;
+
+DEFAULT_ITEM:
+    DEFAULT ':' BLOCK_STMT_LIST
     ;
     
 
@@ -699,6 +748,7 @@ int main(void) {
     currentScope = globalTable;
     stackInit(&loopStack);
     stackInit(&labelsStack);
+    stackInit(&switchStack);
 
     // open the file for writing quads
     quadFile = fopen(resultQuadFile, "w");
