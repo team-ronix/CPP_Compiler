@@ -115,11 +115,7 @@ TYPE:
     ;
 
 BLOCK_STMT_LIST:
-      /* empty */ {
-        // symbolTable* temp = currentScope->parent;
-        // free(currentScope);
-        // currentScope = temp;
-    }
+      /* empty */
     |stmt BLOCK_STMT_LIST
     ;
 
