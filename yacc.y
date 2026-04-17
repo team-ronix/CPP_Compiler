@@ -478,6 +478,31 @@ if_prefix:
     }
     ;
 
+single_if: if_prefix BLOCK {
+        char *elseLabel = currentScope->endLabel;
+        exitScope();
+        emit("LABEL", NULL, NULL, elseLabel);
+        exitScope();
+    }
+    ;
+if_else: if_prefix BLOCK {
+        char *endIfLabel = currentScope->parent->endLabel;
+        emit("JMP", NULL, NULL, endIfLabel);
+    } ELSE {
+        char *startOfElseLabel = currentScope->endLabel;
+        emit("LABEL", NULL, NULL, startOfElseLabel);
+        exitScope();
+        enterScope();
+    } block_or_if_else {
+        exitScope();
+        emit("LABEL", NULL, NULL, currentScope->endLabel);
+        exitScope();
+    }
+    ;
+    
+block_or_if_else: BLOCK | if_else | single_if
+    ;
+
 stmt:
       ';' {}
     | expr ';' {}
@@ -606,25 +631,9 @@ stmt:
         emit("LABEL", NULL, NULL, currentScope->endLabel);
         exitScope();
     }
-    | if_prefix BLOCK {
-        char *elseLabel = currentScope->endLabel;
-        exitScope();
-        emit("LABEL", NULL, NULL, elseLabel);
-        exitScope();
-    }
-    | if_prefix BLOCK {
-        char *endIfLabel = currentScope->parent->endLabel;
-        emit("JMP", NULL, NULL, endIfLabel);
-    } ELSE {
-        char *startOfElseLabel = currentScope->endLabel;
-        emit("LABEL", NULL, NULL, startOfElseLabel);
-        exitScope();
-        enterScope();
-    } BLOCK {
-        exitScope();
-        emit("LABEL", NULL, NULL, currentScope->endLabel);
-        exitScope();
-    }
+
+    | single_if
+    | if_else
     
     | SWITCH '(' expr ')' '{' CASE_LIST '}' {}
     | {
