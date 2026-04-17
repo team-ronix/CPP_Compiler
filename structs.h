@@ -109,4 +109,11 @@ valNode varToValNode(varNode *variable);
 char *valTypeToString(valType type);
 char *varToString(const var *variable);
 symbolTable *createSymbolTable(symbolTable *parent);
+
+
+typedef struct {
+    char *elseLabel;  
+    char *endLabel;
+} IfLabelStorage;
+
 #endif

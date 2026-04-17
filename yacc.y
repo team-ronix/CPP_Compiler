@@ -26,6 +26,7 @@ FILE *quadFile = NULL;
 char* startLabel = NULL;
 char* endLabel = NULL;
 Stack loopStack;
+Stack labelsStack;
 
 
 
@@ -73,6 +74,9 @@ Stack loopStack;
 %token INC DEC
 %token CONST
 %token VOID
+
+%nonassoc LOWER_THAN_ELSE
+%nonassoc ELSE
 
 %left GE LE EQ NE '>' '<'
 %left '+' '-'
@@ -128,6 +132,11 @@ BLOCK_STMT_LIST:
 
 BLOCK:
     '{' BLOCK_STMT_LIST '}'
+    ;
+
+branch_stmt:
+      '{' { enterScope(); } BLOCK_STMT_LIST '}' { exitScope(); }
+    | { enterScope(); } unbraced_stmt { exitScope(); }
     ;
 
 PARAM_LIST:
@@ -467,43 +476,37 @@ CONST_TYPE:
 
 if_prefix:
     IF '(' expr ')' {
-        enterScope();
-        char *endIfLabel = createLabel();
-        currentScope->endLabel = endIfLabel;
-
-        enterScope();
-        char *startOfElseLabel = createLabel();
-        currentScope->endLabel = startOfElseLabel;
-        emit("IF_FALSE", $3.place, NULL, startOfElseLabel);
+        IfLabelStorage *labels = malloc(sizeof(IfLabelStorage));
+        labels->elseLabel = createLabel();
+        labels->endLabel  = createLabel();
+        stackPush(&labelsStack, labels);
+        emit("IF_FALSE", $3.place, NULL, labels->elseLabel);
     }
     ;
 
-single_if: if_prefix BLOCK {
-        char *elseLabel = currentScope->endLabel;
-        exitScope();
-        emit("LABEL", NULL, NULL, elseLabel);
-        exitScope();
+single_if: if_prefix branch_stmt %prec LOWER_THAN_ELSE {
+        IfLabelStorage *labels = (IfLabelStorage *)stackPop(&labelsStack);
+        emit("LABEL", NULL, NULL, labels->elseLabel);
+        free(labels);
     }
     ;
-if_else: if_prefix BLOCK {
-        char *endIfLabel = currentScope->parent->endLabel;
-        emit("JMP", NULL, NULL, endIfLabel);
-    } ELSE {
-        char *startOfElseLabel = currentScope->endLabel;
-        emit("LABEL", NULL, NULL, startOfElseLabel);
-        exitScope();
-        enterScope();
-    } block_or_if_else {
-        exitScope();
-        emit("LABEL", NULL, NULL, currentScope->endLabel);
-        exitScope();
+if_else: if_prefix branch_stmt ELSE {
+        IfLabelStorage *labels = (IfLabelStorage *)stackPeek(&labelsStack);
+        emit("JMP",   NULL, NULL, labels->endLabel);
+        emit("LABEL", NULL, NULL, labels->elseLabel);
+    } branch_stmt {
+        IfLabelStorage *labels = (IfLabelStorage *)stackPop(&labelsStack);
+        emit("LABEL", NULL, NULL, labels->endLabel);
+        free(labels);
     }
     ;
     
-block_or_if_else: BLOCK | if_else | single_if
+stmt:
+      unbraced_stmt
+    | '{' { enterScope(); } BLOCK_STMT_LIST '}' { exitScope(); }
     ;
 
-stmt:
+unbraced_stmt:
       ';' {}
     | expr ';' {}
     | PRINT '(' expr ')' ';' {}
@@ -636,11 +639,6 @@ stmt:
     | if_else
     
     | SWITCH '(' expr ')' '{' CASE_LIST '}' {}
-    | {
-        enterScope();
-    } BLOCK {
-        exitScope();
-    }
     ;
 
 CASE_LIST:
@@ -699,6 +697,7 @@ int main(void) {
     }
     currentScope = globalTable;
     stackInit(&loopStack);
+    stackInit(&labelsStack);
 
     // open the file for writing quads
     quadFile = fopen(resultQuadFile, "w");
