@@ -30,6 +30,7 @@ char* endLabel = NULL;
 // TODO: INT->FLOAT, FLOAT->INT, etc. in expr rules
 // TODO: default in switch case
 // TODO: int + int;?????
+// TODO: emit for or and not
 %}
 
 %union {
@@ -566,26 +567,24 @@ stmt:
     | DO stmt WHILE '(' expr ')' ';' {}
     | FOR '(' FOR_INIT ';' expr ';' expr_opt ')' stmt {}
     | WHILE '(' {
-        startLabel = createLabel();
-        endLabel = createLabel();
-        emit("LABEL", NULL, NULL, startLabel);
-    } expr ')' {
-        emit("IF_FALSE", $4.place, NULL, endLabel);
-        controlFlowScope = true;
         symbolTable *newScope = createSymbolTable(currentScope);
         if (newScope == NULL) {
             fprintf(stderr, "Error: Failed to create new scope for 'while' statement.\n");
             // exit(1);
         }
         currentScope = newScope;
+        currentScope->starLabel = createLabel();
+        currentScope->endLabel = createLabel();
+        emit("LABEL", NULL, NULL, currentScope->starLabel);
+    } expr ')' {
+        emit("IF_FALSE", $4.place, NULL, currentScope->endLabel);
+        controlFlowScope = true;
     } stmt {
         // printf("Exiting 'while' scope, returning to parent scope.\n");
-        currentScope = currentScope->parent;
+        emit("JMP", NULL, NULL, currentScope->starLabel);
+        emit("LABEL", NULL, NULL, currentScope->endLabel);
         controlFlowScope = false;
-        emit("JMP", NULL, NULL, startLabel);
-        emit("LABEL", NULL, NULL, endLabel);
-        startLabel = NULL;
-        endLabel = NULL;
+        currentScope = currentScope->parent;
     }
     | IF '(' expr ')' stmt %prec IF {}
     | IF '(' expr ')' stmt ELSE stmt {}

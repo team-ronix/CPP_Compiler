@@ -74,6 +74,8 @@ typedef struct symbolTable
     varNode *variables;
     struct symbolTable *nextSibling;
     struct symbolTable *firstChild;
+    char *starLabel;
+    char *endLabel;
 } symbolTable;
 
 typedef struct exprResult
