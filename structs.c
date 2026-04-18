@@ -56,6 +56,7 @@ varNode *addVariable(symbolTable *table, const char *id, valType type)
     newVar->variable.id = strdup(id);
     newVar->variable.type = type;
     newVar->next = NULL;
+    newVar->paramNext = NULL;
     newVar->variable.isConst = false;
     newVar->variable.isInitialized = false;
     newVar->variable.isUsed = false;
@@ -352,4 +353,74 @@ symbolTable *createSymbolTable(symbolTable *parent)
         }
     }
     return newTable;
+}
+
+function *findFunction(symbolTable *table, const char *id)
+{
+    while (table != NULL)
+    {
+        functionNode *current = table->functions;
+        while (current != NULL)
+        {
+            if (strcmp(current->func.id, id) == 0)
+            {
+                return &current->func;
+            }
+            current = current->next;
+        }
+        table = table->parent;
+    }
+    return NULL;
+}
+
+function *addFunction(symbolTable *table, const char *id, valType returnType)
+{
+    if (findFunction(table, id) != NULL)
+    {
+        return NULL;
+    }
+
+    functionNode *newFuncNode = (functionNode *)malloc(sizeof(functionNode));
+    newFuncNode->func.id = strdup(id);
+    newFuncNode->func.returnType = returnType;
+    newFuncNode->func.parameters = NULL;
+    newFuncNode->next = NULL;
+
+    if (table->functions == NULL)
+    {
+        table->functions = newFuncNode;
+    }
+    else
+    {
+        functionNode *current = table->functions;
+        while (current->next != NULL)
+        {
+            current = current->next;
+        }
+        current->next = newFuncNode;
+    }
+    return &newFuncNode->func;
+}
+
+bool addParameterToFunction(function *func, varNode *param)
+{
+    if (func == NULL || param == NULL)
+    {
+        return false;
+    }
+    param->paramNext = NULL;
+    if (func->parameters == NULL)
+    {
+        func->parameters = param;
+    }
+    else
+    {
+        varNode *current = func->parameters;
+        while (current->paramNext != NULL)
+        {
+            current = current->paramNext;
+        }
+        current->paramNext = param;
+    }
+    return true;
 }

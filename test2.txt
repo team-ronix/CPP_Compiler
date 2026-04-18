@@ -1,0 +1,5 @@
+int foo(int a = 1, int b = 2, int c = 3) {
+   return 1;
+}
+int x,y,z;
+int a = foo(x,y,z);

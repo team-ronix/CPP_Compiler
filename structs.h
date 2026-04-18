@@ -17,6 +17,7 @@ typedef enum
     typeBool,
     typeChar,
     typeString,
+    typeVoid,
     noType
 } valType;
 
@@ -64,10 +65,30 @@ typedef struct varNode
 {
     var variable;
     struct varNode *next;
+    struct varNode *paramNext;
     struct symbolTable *scope;
 } varNode;
 
+typedef struct function
+{
+    char *id;
+    valType returnType;
+    varNode *parameters;
+    struct symbolTable *scope;
+} function;
 
+typedef struct functionNode
+{
+    function func;
+    struct functionNode *next;
+} functionNode;
+
+typedef struct argNode
+{
+    valNode val;
+    char *place;
+    struct argNode *next;
+} argNode;
 
 typedef struct symbolTable
 {
@@ -79,6 +100,8 @@ typedef struct symbolTable
     bool isLoopScope;
     char *starLabel;
     char *endLabel;
+    functionNode *functions;
+    bool isFunctionScope;
 } symbolTable;
 
 typedef struct exprResult
@@ -110,15 +133,19 @@ char *valTypeToString(valType type);
 char *varToString(const var *variable);
 symbolTable *createSymbolTable(symbolTable *parent);
 
-
-typedef struct {
-    char *elseLabel;  
+typedef struct
+{
+    char *elseLabel;
     char *endLabel;
 } IfLabelStorage;
 
-typedef struct {
+typedef struct
+{
     char *switchExpr;
     char *matchedVar;
 } SwitchStorage;
 
+function *findFunction(symbolTable *table, const char *id);
+function *addFunction(symbolTable *table, const char *id, valType returnType);
+bool addParameterToFunction(function *func, varNode *param);
 #endif

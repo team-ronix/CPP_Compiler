@@ -18,6 +18,8 @@ extern int lineNumber;
 symbolTable *globalTable = NULL;
 valType currentType = noType;
 symbolTable *currentScope = NULL;
+function *currentFunction = NULL;
+valType funcType = noType;
 bool isConstDecl = false;
 int resultCounter = 0;
 int labelsCounter = 0;
@@ -28,6 +30,8 @@ char* endLabel = NULL;
 Stack loopStack;
 Stack labelsStack;
 Stack switchStack;
+
+
 
 
 
@@ -54,8 +58,8 @@ Stack switchStack;
         valNode val;
         char *place;
     } assign;
-    
 
+    argNode *argList;
 
 }
 
@@ -67,7 +71,10 @@ Stack switchStack;
 %token <sValue> IDENTIFIER
 %token <bValue> BOOLEAN
 %type <exprNode> expr
+%type <exprNode> FUNCTION_CALL
+%type <argList> ARG_LIST
 %type <exprNode> for_cond_opt
+%type <bValue> BLOCK_STMT_LIST BLOCK branch_stmt single_if if_else stmt unscoped_stmt unbraced_stmt
 %token INT FLOAT BOOL CHAR STRING
 %token IF ELSE FOR WHILE SWITCH CASE DO BREAK CONTINUE RETURN DEFAULT
 %token PRINT
@@ -112,49 +119,173 @@ TYPE:
     | BOOL {currentType = typeBool;}
     | CHAR {currentType = typeChar;}
     | STRING {currentType = typeString;}
-    | VOID
+    | VOID {currentType = typeVoid;}
     ;
 
 BLOCK_STMT_LIST:
-      /* empty */
-    |stmt BLOCK_STMT_LIST
+            /* empty */ { $$ = 0; }
+        | stmt BLOCK_STMT_LIST { $$ = $1 || $2; }
     ;
 
 BLOCK:
-    '{' BLOCK_STMT_LIST '}'
+        '{' BLOCK_STMT_LIST '}' { $$ = $2; }
     ;
 
 branch_stmt:
-      '{' { enterScope(); } BLOCK_STMT_LIST '}' { exitScope(); }
-    | single_if
-    | if_else
-    | { enterScope(); } unbraced_stmt { exitScope(); }
+            '{' { enterScope(); } BLOCK_STMT_LIST '}' { exitScope(); $$ = $3; }
+        | single_if { $$ = $1; }
+        | if_else { $$ = $1; }
+        | { enterScope(); } unbraced_stmt { exitScope(); $$ = $2; }
     ;
 
 PARAM_LIST:
     /* empty */
-    | TYPE IDENTIFIER DEFAULT_VAL
-    | PARAM_LIST ',' TYPE IDENTIFIER DEFAULT_VAL
+    | PARAMETER
+    | PARAM_LIST ',' PARAMETER
+    ;
+
+PARAMETER:
+    TYPE IDENTIFIER ASSIGNMENT {
+        varNode *param = NULL;
+        if ($3.hasValue) {
+            param = addVariableWithValue(currentScope, $2, currentType, false, $3.val);
+        } else {
+            param = addVariable(currentScope, $2, currentType);
+        }
+        if (param == NULL) {
+            fprintf(stderr, "Error: Parameter '%s' already declared in this scope.\n", $2);
+        } else if (!addParameterToFunction(currentFunction, param)) {
+            fprintf(stderr, "Error: Failed to add parameter '%s' to function.\n", $2);
+        }
+        emit("PARAM", $3.hasValue ? $3.place : NULL, NULL, $2);
+    }
     ;
 
 FUNCTION:
-    TYPE IDENTIFIER '('PARAM_LIST ')' BLOCK
+    TYPE IDENTIFIER '('{
+        function* func = addFunction(currentScope, $2, currentType);
+        if(func == NULL) {
+            fprintf(stderr, "Error: Function '%s' already declared in this scope.\n", $2);
+            // exit(1);
+        } else {
+            currentFunction = func;
+            enterScope();
+            func->scope = currentScope;
+            currentScope->isFunctionScope = true;
+            funcType = currentType;
+            emit("FUNC_START", NULL, NULL, $2);
+        }
+    } PARAM_LIST ')' {
+        if (currentFunction != NULL) {
+            varNode *param = currentFunction->parameters;
+            bool hasDefault = false;
+            while (param != NULL) {
+                if (hasDefault && !param->variable.isInitialized) {
+                    fprintf(stderr, "Error: Non-default parameter '%s' cannot follow default parameters.\n", param->variable.id);
+                }
+                if (param->variable.isInitialized) {
+                    hasDefault = true;
+                }
+                param = param->paramNext;
+            }
+        }
+    } BLOCK {
+        if (currentFunction != NULL) {
+            if (funcType != typeVoid && !$8) {
+                fprintf(stderr, "Error: Function '%s' may reach end without returning a value.\n", currentFunction->id);
+            }
+            currentFunction = NULL;
+            currentType = noType;
+            funcType = noType;
+            exitScope();
+            emit("FUNC_END", NULL, NULL, $2);
+        }
+    }
   ;
 
 ARG_LIST:
-    /* empty */
-    | expr
-    | ARG_LIST ',' expr
+    /* empty */ { $$ = NULL; }
+    | expr {
+        argNode *arg = malloc(sizeof(argNode));
+        arg->val = $1.val;
+        arg->place = $1.place;
+        arg->next = NULL;
+        $$ = arg;
+    }
+    | ARG_LIST ',' expr {
+        argNode *arg = malloc(sizeof(argNode));
+        arg->val = $3.val;
+        arg->place = $3.place;
+        arg->next = NULL;
+
+        argNode *current = $1;
+        if (current == NULL) {
+            $$ = arg;
+        } else {
+            while (current->next != NULL) {
+                current = current->next;
+            }
+            current->next = arg;
+            $$ = $1;
+        }
+    }
 ;
 
 FUNCTION_CALL:
-    IDENTIFIER '(' ARG_LIST ')'
+    IDENTIFIER '(' ARG_LIST ')' {
+        $$.place = strdup("INVALID_CALL");
+        $$.val.type = noType;
+        $$.val.value.iValue = 0;
+
+        function *func = findFunction(currentScope, $1);
+        if (func == NULL) {
+            fprintf(stderr, "Error: Function '%s' not declared.\n", $1);
+            // exit(1);
+        } else {
+            varNode *params = func->parameters;
+            argNode *args = $3;
+            while (params != NULL) {
+                if (args != NULL) {
+                    canConvertResult res = canConvert(args->val.type, params->variable.type);
+                    if (!res.canConvert) {
+                        fprintf(stderr,
+                            "Error: Argument type mismatch in function '%s' call. Expected type %d but got type %d.\n",
+                            $1, params->variable.type, args->val.type);
+                    } else {
+                        emit("ARG", args->place, NULL, NULL);
+                    }
+                    args = args->next;
+                }
+                else if (params->variable.isInitialized) {
+                    emit("ARG", "DEFAULT", NULL, NULL);
+                }
+                else {
+                    fprintf(stderr,
+                        "Error: Too few arguments in function '%s' call. Missing argument of type %d.\n",
+                        $1, params->variable.type);
+                }
+                params = params->paramNext;
+            }
+
+            if (args != NULL) {
+                fprintf(stderr,
+                    "Error: Function '%s' called with too many arguments.\n", $1);
+            }
+
+            if (func->returnType == typeVoid) {
+                $$.place = strdup("VOID_CALL");
+            } else {
+                $$.place = tempResult();
+            }
+
+            $$.val.type = func->returnType;
+            $$.val.value.iValue = 0;
+
+            emit("CALL", $1, NULL, func->returnType == typeVoid ? NULL : $$.place);
+        }
+    }
 ;
 
-DEFAULT_VAL:
-    '=' expr
-    | /* empty */
-    ;
 
 FOR_INIT:
     TYPE IDENTIFIER '=' expr {
@@ -266,6 +397,10 @@ CHAINED_DECLARATION:
 ;
 
 expr:
+    FUNCTION_CALL {
+        $$ = $1;
+    }
+    |
     IDENTIFIER { 
         varNode *var = findVariable(currentScope, $1);
         if (var == NULL) {
@@ -530,31 +665,34 @@ single_if: if_prefix branch_stmt %prec LOWER_THAN_ELSE {
         IfLabelStorage *labels = (IfLabelStorage *)stackPop(&labelsStack);
         emit("LABEL", NULL, NULL, labels->elseLabel);
         free(labels);
+                $$ = 0;
     }
     ;
 if_else: if_prefix branch_stmt ELSE {
         IfLabelStorage *labels = (IfLabelStorage *)stackPeek(&labelsStack);
         emit("JMP",   NULL, NULL, labels->endLabel);
         emit("LABEL", NULL, NULL, labels->elseLabel);
+                $<bValue>$ = $2;
     } branch_stmt {
         IfLabelStorage *labels = (IfLabelStorage *)stackPop(&labelsStack);
         emit("LABEL", NULL, NULL, labels->endLabel);
         free(labels);
+                $$ = $<bValue>4 && $5;
     }
     ;
     
 stmt:
-      unbraced_stmt
-    | '{' { enterScope(); } BLOCK_STMT_LIST '}' { exitScope(); }
-    | single_if
-    | if_else
+            unbraced_stmt { $$ = $1; }
+        | '{' { enterScope(); } BLOCK_STMT_LIST '}' { exitScope(); $$ = $3; }
+        | single_if { $$ = $1; }
+        | if_else { $$ = $1; }
     ;
 
 unscoped_stmt:
-      '{' BLOCK_STMT_LIST '}'
-    | single_if
-    | if_else
-    | unbraced_stmt
+            '{' BLOCK_STMT_LIST '}' { $$ = $2; }
+        | single_if { $$ = $1; }
+        | if_else { $$ = $1; }
+        | unbraced_stmt { $$ = $1; }
     ;
 
 switch_prefix:
@@ -575,15 +713,15 @@ switch_prefix:
     ;
 
 unbraced_stmt:
-      ';' {}
-    | expr ';' {}
-    | PRINT '(' expr ')' ';' {}
-    | TYPE IDENTIFIER ASSIGNMENT CHAINED_DECLARATION ';' {
-        bool hasError = false;
-        if(isInCurrentScope(currentScope, $2)) {
-            fprintf(stderr, "Error: Variable '%s' already declared in this scope.\n", $2);
-            hasError = true;
-        }
+            ';' { $$ = 0; }
+        | expr ';' { $$ = 0; }
+        | PRINT '(' expr ')' ';' { $$ = 0; }
+        | TYPE IDENTIFIER ASSIGNMENT CHAINED_DECLARATION ';' {
+            bool hasError = false;
+            if(isInCurrentScope(currentScope, $2)) {
+                fprintf(stderr, "Error: Variable '%s' already declared in this scope.\n", $2);
+                hasError = true;
+            }
         
         if($3.hasValue) {
             valNode val = $3.val;
@@ -609,6 +747,7 @@ unbraced_stmt:
             addVariable(currentScope, $2, currentType);
         }
         currentType = noType;
+        $$ = 0;
     }
     | CONST_TYPE TYPE IDENTIFIER ASSIGNMENT CHAINED_DECLARATION ';' {
         valNode val = $4.val;
@@ -635,6 +774,7 @@ unbraced_stmt:
             isConstDecl = false;
             currentType = noType;
         }  
+        $$ = 0;
     }
     | IDENTIFIER '=' expr ';' {
         varNode *var = findVariable(currentScope, $1);
@@ -650,13 +790,15 @@ unbraced_stmt:
                 var->variable.isInitialized = true;
             }
         }
+        $$ = 0;
     }
-    | FUNCTION_CALL ';' {}
     | IDENTIFIER INC ';' {
         handleIncDec(currentScope, $1, "INC");
+        $$ = 0;
     }
     | IDENTIFIER DEC ';' {
         handleIncDec(currentScope, $1, "DEC");
+        $$ = 0;
     }
     | BREAK ';' {
         // TODO check for switch case as well
@@ -666,6 +808,7 @@ unbraced_stmt:
         } else {
             emit("JMP_BREAK", NULL, NULL, loopScope->endLabel);
         }
+        $$ = 0;
     }
     | CONTINUE ';' {
         symbolTable *loopScope = findNearestLoopScope(currentScope);
@@ -674,8 +817,26 @@ unbraced_stmt:
         } else {
             emit("JMP_CONTINUE", NULL, NULL, loopScope->starLabel);
         }
+        $$ = 0;
     }
-    | RETURN expr ';' {}
+    | RETURN expr ';' {
+        if (currentFunction == NULL) {
+            fprintf(stderr, "Error: 'return' statement not within a function.\n");
+            // exit(1);
+        } else {
+            if (currentFunction->returnType == typeVoid) {
+                fprintf(stderr, "Error: 'return' statement with a value in a void function.\n");
+                // exit(1);
+            }
+            canConvertResult res = canConvert($2.val.type, funcType);
+            if (res.canConvert) {
+                emit("RETURN", $2.place, NULL, NULL);
+            } else {
+                fprintf(stderr, "Error: Return type mismatch. Expected type %d but got type %d.\n", funcType, $2.val.type);
+            }
+        }
+        $$ = 1;
+    }
     | DO {
         enterScope();
         currentScope->starLabel = createLabel();
@@ -688,6 +849,7 @@ unbraced_stmt:
         emit("JMP", NULL, NULL, currentScope->starLabel);
         emit("LABEL", NULL, NULL, currentScope->endLabel);
         exitScope();
+        $$ = 0;
     }
     | FOR '(' {
         enterScope();
@@ -724,6 +886,7 @@ unbraced_stmt:
         IfLabelStorage *forLabels = (IfLabelStorage *)$<sValue>12;
         free(forLabels);
         exitScope();
+        $$ = 0;
     }
     | WHILE '(' {
         enterScope();
@@ -737,6 +900,7 @@ unbraced_stmt:
         emit("JMP", NULL, NULL, currentScope->starLabel);
         emit("LABEL", NULL, NULL, currentScope->endLabel);
         exitScope();
+        $$ = 0;
     }
     
     | switch_prefix '{' CASE_LIST '}' {
@@ -746,6 +910,7 @@ unbraced_stmt:
         SwitchStorage *sw = (SwitchStorage *)stackPop(&switchStack);
         free(sw->switchExpr);
         free(sw);
+        $$ = 0;
     }
     ;
 
