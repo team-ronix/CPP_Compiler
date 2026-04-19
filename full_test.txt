@@ -1,0 +1,200 @@
+// Comprehensive compiler test file
+// Covers declarations, assignments, expressions, control flow, functions, switch, and semantic edge cases.
+
+// ----------------------------
+// Global declarations
+// ----------------------------
+int gInt = 5;
+float gFloat = 2;
+bool gBool = 0;
+char gChar = 65;
+string gStr = "hello";
+const int gConst = 7;
+
+// Chained declarations
+int c1, c2 = 20, c3;
+float c4 = 3.5, c5;
+
+// Edge: duplicate declaration in same scope
+int dup = 1;
+int dup = 2;
+
+// Edge: constant without initialization
+const int badConst;
+
+// ----------------------------
+// Functions
+// ----------------------------
+int add(int a, int b) {
+    return a + b;
+}
+
+// Edge: non-default parameter after default
+int badDefaults(int a = 1, int b) {
+    return a + b;
+}
+
+float mix(float x, int y = 2) {
+    float z = x + y;
+    return z;
+}
+
+void logValue(int v = 10) {
+    print(v);
+}
+
+// Edge: returning value in void function
+void badVoid() {
+    return 5;
+}
+
+// Edge: non-void function with missing return path
+int maybeReturn(int x) {
+    if (x > 0) {
+        return x;
+    }
+}
+
+// Edge: duplicate function name
+int add(int x) {
+    x = 3;
+    int a = x + 3;
+    return x;
+}
+
+// ----------------------------
+// Main-style global statements
+// ----------------------------
+int mainVal = 0;
+int uninit;
+
+// Edge: use before initialization
+print(uninit);
+
+mainVal = 10;
+gFloat = 9;
+gBool = 2.5;
+mainVal = true;
+
+// Edge: assignment type mismatch
+gStr = 123;
+
+// Edge: assignment to undeclared variable
+neverDeclared = 50;
+
+// ----------------------------
+// Arithmetic and comparison
+// ----------------------------
+int ar1 = 5 + 3 * 2;
+int ar2 = (5 + 3) * 2;
+float ar3 = 7 / 2.0;
+int ar4 = 'A' + 2;
+
+bool cmp1 = ar1 > ar2;
+bool cmp2 = ar1 <= ar2;
+bool cmp3 = ar1 == ar2;
+bool cmp4 = ar1 != ar2;
+
+bool logic1 = ar1 && ar2;
+bool logic2 = ar1 || 0;
+bool logic3 = !ar1;
+
+// ----------------------------
+// If / else and scoped redeclaration
+// ----------------------------
+if (ar1 > ar2) {
+    int scoped = 1;
+    scoped = scoped + 1;
+} else {
+    int scoped = 2;
+    scoped = scoped + 2;
+}
+
+if (mainVal) mainVal = mainVal + 1;
+
+// ----------------------------
+// While / do-while / for
+// ----------------------------
+int i = 0;
+while (i < 3) {
+    i++;
+    if (i == 2) {
+        continue;
+    }
+    mainVal = mainVal + i;
+}
+
+do {
+    i--;
+    if (i == 0) {
+        break;
+    }
+} while (i > -3);
+
+for (int j = 0; j < 4; j++) {
+    if (j == 1) {
+        continue;
+    }
+    if (j == 3) {
+        break;
+    }
+    mainVal = mainVal + j;
+}
+
+for (;;) {
+    break;
+}
+
+// Edge: break / continue outside loop
+break;
+continue;
+
+// ----------------------------
+// Switch / case / default with fallthrough
+// ----------------------------
+int sw = 2;
+switch (sw) {
+    case 1:
+        mainVal = mainVal + 100;
+        break;
+    case 2:
+        mainVal = mainVal + 200;
+    case 3:
+        mainVal = mainVal + 300;
+        break;
+    default:
+        mainVal = mainVal + 400;
+}
+
+// ----------------------------
+// Function calls
+// ----------------------------
+int r1 = add(1, 2);
+float r2 = mix(2.5);
+logValue();
+
+// Edge: too few arguments
+int badCall1 = add(1);
+
+// Edge: too many arguments
+int badCall2 = add(1, 2, 3);
+
+// Edge: argument type mismatch
+int badCall3 = add("x", 2);
+
+// Edge: undeclared function call
+int badCall4 = missingFunction(1);
+
+// Edge: increment/decrement checks
+int counter = 0;
+counter++;
+counter--;
+
+const int fixed = 10;
+fixed++;
+
+undeclaredInc++;
+undeclaredDec--;
+
+// Edge: return outside function
+return 123;

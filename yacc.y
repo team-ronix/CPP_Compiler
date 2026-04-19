@@ -6,6 +6,7 @@
 
 #include "handlers/arithmetic.h"
 #include "handlers/comparison.h"
+#include "handlers/logical.h"
 #include "handlers/utils.h"
 void yyerror(const char *s);
 int yylex(void);
@@ -24,6 +25,7 @@ bool isConstDecl = false;
 int resultCounter = 0;
 int labelsCounter = 0;
 const char *resultQuadFile = "quads.txt";
+const char *resultErrorFile = "errors.txt";
 FILE *quadFile = NULL;
 char* startLabel = NULL;
 char* endLabel = NULL;
@@ -146,42 +148,57 @@ PARAM_LIST:
 
 PARAMETER:
     TYPE IDENTIFIER ASSIGNMENT {
-        varNode *param = NULL;
-        if ($3.hasValue) {
-            param = addVariableWithValue(currentScope, $2, currentType, false, $3.val);
-        } else {
-            param = addVariable(currentScope, $2, currentType);
+        if(currentFunction != NULL) {
+            varNode *param = findParameter(currentFunction, $2);
+            if (param == NULL) {
+                if ($3.hasValue) {
+                    param = addVariableWithValue(currentScope, $2, currentType, false, $3.val);
+                } else {
+                    param = addVariable(currentScope, $2, currentType);
+                }
+                if (param == NULL) {
+                    ERRORF("Failed to declare parameter '%s'.", $2);
+                } else {
+                    if (!addParameterToFunction(currentFunction, param)) {
+                        ERRORF("Failed to add parameter '%s' to function.", $2);
+                    } else {
+                        param->variable.isInitialized = true;
+                        emit("PARAM", $3.hasValue ? $3.place : NULL, NULL, $2);
+                    }
+                }
+            }
         }
-        if (param == NULL) {
-            fprintf(stderr, "Error: Parameter '%s' already declared in this scope.\n", $2);
-        } else if (!addParameterToFunction(currentFunction, param)) {
-            fprintf(stderr, "Error: Failed to add parameter '%s' to function.\n", $2);
-        }
-        emit("PARAM", $3.hasValue ? $3.place : NULL, NULL, $2);
     }
     ;
 
 FUNCTION:
     TYPE IDENTIFIER '('{
-        function* func = addFunction(currentScope, $2, currentType);
-        if(func == NULL) {
-            fprintf(stderr, "Error: Function '%s' already declared in this scope.\n", $2);
+        function* func = findFunction(currentScope, $2);
+        if (func != NULL) {
+            ERRORF("Function '%s' already declared in this scope.", $2);
             // exit(1);
         } else {
-            currentFunction = func;
-            enterScope();
-            func->scope = currentScope;
-            currentScope->isFunctionScope = true;
-            funcType = currentType;
-            emit("FUNC_START", NULL, NULL, $2);
-        }
+            func = addFunction(currentScope, $2, currentType);
+            if(func == NULL) {
+                ERRORF("declaring function");
+                // exit(1);
+            } else {
+                currentFunction = func;
+                enterScope();
+                func->scope = currentScope;
+                currentScope->isFunctionScope = true;
+                funcType = currentType;
+                emit("FUNC_START", NULL, NULL, $2);
+            }
+        }        
     } PARAM_LIST ')' {
         if (currentFunction != NULL) {
+            // printf("Declared function '%s' with return type %d and parameters: ", currentFunction->id, funcType);
             varNode *param = currentFunction->parameters;
             bool hasDefault = false;
             while (param != NULL) {
                 if (hasDefault && !param->variable.isInitialized) {
-                    fprintf(stderr, "Error: Non-default parameter '%s' cannot follow default parameters.\n", param->variable.id);
+                    ERRORF("Non-default parameter '%s' cannot follow default parameters.", param->variable.id);
                 }
                 if (param->variable.isInitialized) {
                     hasDefault = true;
@@ -192,7 +209,7 @@ FUNCTION:
     } BLOCK {
         if (currentFunction != NULL) {
             if (funcType != typeVoid && !$8) {
-                fprintf(stderr, "Error: Function '%s' may reach end without returning a value.\n", currentFunction->id);
+                WARNF("Function '%s' may reach end without returning a value.", currentFunction->id);
             }
             currentFunction = NULL;
             currentType = noType;
@@ -239,49 +256,71 @@ FUNCTION_CALL:
 
         function *func = findFunction(currentScope, $1);
         if (func == NULL) {
-            fprintf(stderr, "Error: Function '%s' not declared.\n", $1);
-            // exit(1);
+            ERRORF("Function '%s' not declared.", $1);
         } else {
+            bool callHasErrors = false;
             varNode *params = func->parameters;
             argNode *args = $3;
             while (params != NULL) {
                 if (args != NULL) {
                     canConvertResult res = canConvert(args->val.type, params->variable.type);
                     if (!res.canConvert) {
-                        fprintf(stderr,
-                            "Error: Argument type mismatch in function '%s' call. Expected type %d but got type %d.\n",
-                            $1, params->variable.type, args->val.type);
+                        ERRORF("Argument type mismatch in function '%s' call. Expected type %d but got type %d.", $1, params->variable.type, args->val.type);
+                        callHasErrors = true;
+                        break;
                     } else {
                         emit("ARG", args->place, NULL, NULL);
                     }
                     args = args->next;
-                }
-                else if (params->variable.isInitialized) {
-                    emit("ARG", "DEFAULT", NULL, NULL);
-                }
-                else {
-                    fprintf(stderr,
-                        "Error: Too few arguments in function '%s' call. Missing argument of type %d.\n",
-                        $1, params->variable.type);
+                } else {
+                    if (params->variable.isInitialized) {
+                        // Emit default value - convert to string representation
+                        char defaultVal[50];
+                        switch (params->variable.type) {
+                            case typeInt:
+                                sprintf(defaultVal, "%d", params->variable.value.iValue);
+                                break;
+                            case typeFloat:
+                                sprintf(defaultVal, "%f", params->variable.value.fValue);
+                                break;
+                            case typeBool:
+                                sprintf(defaultVal, "%d", params->variable.value.bValue);
+                                break;
+                            case typeChar:
+                                sprintf(defaultVal, "'%c'", params->variable.value.cValue);
+                                break;
+                            case typeString:
+                                sprintf(defaultVal, "\"%s\"", params->variable.value.sValue);
+                                break;
+                            default:
+                                strcpy(defaultVal, "0");
+                        }
+                        emit("ARG", strdup(defaultVal), NULL, NULL);
+                    } else {
+                        ERRORF("Too few arguments in function '%s' call. Missing argument of type %d.", $1, params->variable.type);
+                        callHasErrors = true;
+                        break;
+                    }
                 }
                 params = params->paramNext;
             }
 
             if (args != NULL) {
-                fprintf(stderr,
-                    "Error: Function '%s' called with too many arguments.\n", $1);
+                ERRORF("Function '%s' called with too many arguments.", $1);
+                callHasErrors = true;
             }
 
-            if (func->returnType == typeVoid) {
-                $$.place = strdup("VOID_CALL");
-            } else {
-                $$.place = tempResult();
+            // Only emit CALL if there were no validation errors
+            if (!callHasErrors) {
+                if (func->returnType == typeVoid) {
+                    $$.place = strdup("VOID_CALL");
+                } else {
+                    $$.place = tempResult();
+                }
+                $$.val.type = func->returnType;
+                $$.val.value.iValue = 0;
+                emit("CALL", $1, NULL, func->returnType == typeVoid ? NULL : $$.place);
             }
-
-            $$.val.type = func->returnType;
-            $$.val.value.iValue = 0;
-
-            emit("CALL", $1, NULL, func->returnType == typeVoid ? NULL : $$.place);
         }
     }
 ;
@@ -290,7 +329,7 @@ FUNCTION_CALL:
 FOR_INIT:
     TYPE IDENTIFIER '=' expr {
         if(isInCurrentScope(currentScope, $2)) {
-            fprintf(stderr, "Error: Variable '%s' already declared in this scope.\n", $2);
+            ERRORF("Variable '%s' already declared in this scope.", $2);
         } else {
             emit("DECL", $4.place, NULL, $2);
             addVariableWithValue(currentScope, $2, currentType, false, $4.val);
@@ -300,10 +339,10 @@ FOR_INIT:
     | IDENTIFIER '=' expr {
         varNode *var = findVariable(currentScope, $1);
         if(!var) {
-            fprintf(stderr, "Error: Variable '%s' you can't assign value to variable not declared before \n", $1);
+            ERRORF("Variable '%s' you can't assign value to variable not declared before", $1);
         } else {
             if(!editValue(currentScope, $1, &$3.val)) {
-                fprintf(stderr, "Error: Failed to assign value to variable '%s'.\n", $1);
+                ERRORF("Failed to assign value to variable '%s'.", $1);
             } else {
                 emit("=", $3.place, NULL, $1);
                 var->variable.isInitialized = true;
@@ -337,10 +376,10 @@ expr_opt:
     | IDENTIFIER '=' expr {
         varNode *var = findVariable(currentScope, $1);
         if(!var) {
-            fprintf(stderr, "Error: Variable '%s' you can't assign value to variable not declared before \n", $1);
+            ERRORF("Variable '%s' you can't assign value to variable not declared before", $1);
         } else {
             if(!editValue(currentScope, $1, &$3.val)) {
-                fprintf(stderr, "Error: Failed to assign value to variable '%s'.\n", $1);
+                ERRORF("Failed to assign value to variable '%s'.", $1);
             }else {
                 emit("=", $3.place, NULL, $1);
                 var->variable.isInitialized = true;
@@ -363,38 +402,36 @@ ASSIGNMENT:
 CHAINED_DECLARATION:
     /* empty */
     | ',' IDENTIFIER ASSIGNMENT CHAINED_DECLARATION {
-        {
         if(isInCurrentScope(currentScope, $2)) {
-            fprintf(stderr, "Error: Variable '%s' already declared in this scope.\n", $2);
+            ERRORF("Variable '%s' already declared in this scope.", $2);
             // exit(1);
-        }
-        if($3.hasValue) {
-            
-            // printf("Declaring variable '%s' with initial value.\n", $2);
-            valNode val = $3.val;
-            if(val.type != currentType) {
-                // check if we can do implicit conversion from int to float or char to int, etc.
-                canConvertResult convRes = canConvert(val.type, currentType);
-                if(convRes.canConvert) {
-                    val = convertValue(val, currentType);
-                } else {
-                    fprintf(stderr, "Error: Type mismatch for variable '%s'. Expected type %d but got type %d.\n", $2, currentType, val.type);
+        } else {
+            if($3.hasValue) {
+                // printf("Declaring variable '%s' with initial value.\n", $2);
+                valNode val = $3.val;
+                if(val.type != currentType) {
+                    // check if we can do implicit conversion from int to float or char to int, etc.
+                    canConvertResult convRes = canConvert(val.type, currentType);
+                    if(convRes.canConvert) {
+                        val = convertValue(val, currentType);
+                    } else {
+                        ERRORF("Type mismatch for variable '%s'. Expected type %d but got type %d.", $2, currentType, val.type);
+                        // exit(1);
+                    }
+                }
+                emit("DECL", $3.place, NULL, $2);
+                addVariableWithValue(currentScope, $2, currentType, false, $3.val);
+            }
+            else {
+                if(isConstDecl) {
+                    ERRORF("Constant variable '%s' must be initialized.", $2);
                     // exit(1);
                 }
+                // printf("Declaring variable '%s' without initial value.\n", $2);
+                emit("DECL", NULL, NULL, $2);
+                addVariable(currentScope, $2, currentType);
             }
-            emit("DECL", $3.place, NULL, $2);
-            addVariableWithValue(currentScope, $2, currentType, false, $3.val);
         }
-        else {
-            if(isConstDecl) {
-                fprintf(stderr, "Error: Constant variable '%s' must be initialized.\n", $2);
-                // exit(1);
-            }
-            // printf("Declaring variable '%s' without initial value.\n", $2);
-            emit("DECL", NULL, NULL, $2);
-            addVariable(currentScope, $2, currentType);
-        }
-    }
     }
 ;
 
@@ -406,18 +443,19 @@ expr:
     IDENTIFIER { 
         varNode *var = findVariable(currentScope, $1);
         if (var == NULL) {
-            fprintf(stderr, "Error: Variable '%s' not declared.\n", $1);
+            ERRORF("Variable '%s' not declared.", $1);
             // // exit(1);
+        } else {
+            if (!var->variable.isInitialized) {
+                WARNF("Variable '%s' is used before initialization.", $1);
+                // // exit(1);
+            }
+            var->variable.isUsed = true;
+            char buffer[20];
+            sprintf(buffer, "%s", $1);
+            $$.place = strdup(buffer);
+            $$.val = varToValNode(var);
         }
-        if (!var->variable.isInitialized) {
-            fprintf(stderr, "Error: Variable '%s' is used before initialization.\n", $1);
-            // // exit(1);
-        }
-        var->variable.isUsed = true;
-        char buffer[20];
-        sprintf(buffer, "%s", $1);
-        $$.place = strdup(buffer);
-        $$.val = varToValNode(var);
     }
     | INTEGER    {
         valNode node;
@@ -479,7 +517,7 @@ expr:
     }
     | '-' expr %prec UMINUS {
         if ($2.val.type != typeInt && $2.val.type != typeFloat && $2.val.type != typeChar) {
-            fprintf(stderr, "Error: Unary '-' operator requires numeric operand.\n");
+            ERRORF("Unary '-' operator requires numeric operand.");
         } else {
             valNode resultNode;
             resultNode.type = $2.val.type;
@@ -583,68 +621,27 @@ expr:
         $$.val = $2.val;
     }
     | NOT expr {
-        if ($2.val.type != typeInt && $2.val.type != typeFloat && $2.val.type != typeChar) {
-            fprintf(stderr, "Error: Unary 'NOT' operator requires numeric operand.\n");
-        } else {
-            valNode resultNode;
-            resultNode.type = typeBool;
-            if ($2.val.type == typeInt) {
-                resultNode.value.bValue = !($2.val.value.iValue);
-            } else if ($2.val.type == typeFloat) {
-                resultNode.value.bValue = !($2.val.value.fValue);
-            } else if ($2.val.type == typeChar) {
-                resultNode.value.bValue = !((int)$2.val.value.cValue);
-            }
-            char buffer[20];
-            sprintf(buffer, "NOT %s", $2.place);
-            $$.place = strdup(buffer);
-            $$.val = resultNode;
+        exprResult res = logicalNotOperation(&$2.val);
+        if(!res.error) {
+            emit("NOT", $2.place, NULL, res.place);
+            $$.place = res.place;
+            $$.val = res.value;
         }
     }
     | expr AND expr {
-        if ($1.val.type != typeInt && $1.val.type != typeFloat && $1.val.type != typeChar) {
-            fprintf(stderr, "Error: Left operand of 'AND' must be numeric.\n");
-        } else if ($3.val.type != typeInt && $3.val.type != typeFloat && $3.val.type != typeChar) {
-            fprintf(stderr, "Error: Right operand of 'AND' must be numeric.\n");
-        } else {
-            valNode resultNode;
-            resultNode.type = typeBool;
-            bool leftVal = ($1.val.type == typeInt) ? $1.val.value.iValue :
-                           ($1.val.type == typeFloat) ? $1.val.value.fValue :
-                                                        (int)$1.val.value.cValue;
-
-            bool rightVal = ($3.val.type == typeInt) ? $3.val.value.iValue :
-                            ($3.val.type == typeFloat) ? $3.val.value.fValue :
-                                                         (int)$3.val.value.cValue;
-
-            resultNode.value.bValue = leftVal && rightVal;
-            char buffer[50];
-            sprintf(buffer, "%s AND %s", $1.place, $3.place);
-            $$.place = strdup(buffer);
-            $$.val = resultNode;
+        exprResult res = logicalBinaryOperation(&$1.val, &$3.val, "AND");
+        if(!res.error) {
+            emit("AND", $1.place, $3.place, res.place);
+            $$.place = res.place;
+            $$.val = res.value;
         }
     }
     | expr OR expr {
-        if ($1.val.type != typeInt && $1.val.type != typeFloat && $1.val.type != typeChar) {
-            fprintf(stderr, "Error: Left operand of 'OR' must be numeric.\n");
-        } else if ($3.val.type != typeInt && $3.val.type != typeFloat && $3.val.type != typeChar) {
-            fprintf(stderr, "Error: Right operand of 'OR' must be numeric.\n");
-        } else {
-            valNode resultNode;
-            resultNode.type = typeBool;
-            bool leftVal = ($1.val.type == typeInt) ? $1.val.value.iValue :
-                           ($1.val.type == typeFloat) ? $1.val.value.fValue :
-                                                        (int)$1.val.value.cValue;
-
-            bool rightVal = ($3.val.type == typeInt) ? $3.val.value.iValue :
-                            ($3.val.type == typeFloat) ? $3.val.value.fValue :
-                                                         (int)$3.val.value.cValue;
-
-            resultNode.value.bValue = leftVal || rightVal;
-            char buffer[50];
-            sprintf(buffer, "%s OR %s", $1.place, $3.place);
-            $$.place = strdup(buffer);
-            $$.val = resultNode;
+        exprResult res = logicalBinaryOperation(&$1.val, &$3.val, "OR");
+        if(!res.error) {
+            emit("OR", $1.place, $3.place, res.place);
+            $$.place = res.place;
+            $$.val = res.value;
         }
     }
     ;
@@ -717,11 +714,14 @@ switch_prefix:
 unbraced_stmt:
             ';' { $$ = 0; }
         | expr ';' { $$ = 0; }
-        | PRINT '(' expr ')' ';' { $$ = 0; }
+        | PRINT '(' expr ')' ';' { 
+            emit("PRINT", $3.place, NULL, NULL);
+            $$ = 0;
+         }
         | TYPE IDENTIFIER ASSIGNMENT CHAINED_DECLARATION ';' {
             bool hasError = false;
             if(isInCurrentScope(currentScope, $2)) {
-                fprintf(stderr, "Error: Variable '%s' already declared in this scope.\n", $2);
+                ERRORF("Variable '%s' already declared in this scope.", $2);
                 hasError = true;
             }
         
@@ -733,7 +733,7 @@ unbraced_stmt:
                 if(convRes.canConvert) {
                     val = convertValue(val, currentType);
                 } else {
-                    fprintf(stderr, "Error: Type mismatch for variable '%s'. Expected type %d but got type %d.\n", $2, currentType, val.type);
+                    ERRORF("Type mismatch for variable '%s'. Expected type %d but got type %d.", $2, currentType, val.type);
                     hasError = true;
                 }
             }
@@ -756,21 +756,21 @@ unbraced_stmt:
         bool hasError = false;
 
         if(isInCurrentScope(currentScope, $3)) {
-            fprintf(stderr, "Error: Variable '%s' already declared in this scope.\n", $3, currentType);
+            ERRORF("Variable '%s' already declared in this scope.", $3);
             // exit(1);
             hasError = true;
         }
-        if(!$4.hasValue) {
-            fprintf(stderr, "Error: Constant variable '%s' must be initialized line number %d.\n", $3, lineNumber);
+        if(!$4.hasValue && hasError == false) {
+            ERRORF("Constant variable '%s' must be initialized.", $3);
             // exit(1);
             hasError = true;
         }
-        if(val.type != currentType) {
-            fprintf(stderr, "Error: Type mismatch for variable '%s'. Expected type %d but got type %d.\n", $3, currentType, val.type);
+        if(val.type != currentType && hasError == false) {
+            ERRORF("Type mismatch for variable '%s'. Expected type %d but got type %d.", $3, currentType, val.type);
             hasError = true;
         }
         if (!hasError) {
-            printf("Declaring constant variable '%s' with initial value.\n", $3);
+            // printf("Declaring constant variable '%s' with initial value.\n", $3);
             addVariableWithValue(currentScope, $3, currentType, true, $4.val); 
             emit("CONST", $4.place, NULL, $3);
             isConstDecl = false;
@@ -781,11 +781,11 @@ unbraced_stmt:
     | IDENTIFIER '=' expr ';' {
         varNode *var = findVariable(currentScope, $1);
         if(!var) {
-            fprintf(stderr, "Error: Variable '%s' you can't assign value to variable not declared before \n", $1);
+            ERRORF("Variable '%s' you can't assign value to variable not declared before", $1);
             // exit(1);
         } else {
             if(!editValue(currentScope, $1, &$3.val)) {
-                fprintf(stderr, "Error: Failed to assign value to variable '%s'.\n", $1);
+                ERRORF("Failed to assign value to variable '%s'.", $1);
                 // exit(1);
             }else {
                 emit("=", $3.place, NULL, $1);
@@ -806,7 +806,7 @@ unbraced_stmt:
         // TODO check for switch case as well
         symbolTable *loopScope = findNearestLoopScope(currentScope);
         if (loopScope == NULL) {
-            fprintf(stderr, "Error: 'break' statement not within a loop.\n");
+            ERRORF("'break' statement not within a loop.");
         } else {
             emit("JMP_BREAK", NULL, NULL, loopScope->endLabel);
         }
@@ -815,7 +815,7 @@ unbraced_stmt:
     | CONTINUE ';' {
         symbolTable *loopScope = findNearestLoopScope(currentScope);
         if (loopScope == NULL) {
-            fprintf(stderr, "Error: 'continue' statement not within a loop.\n");
+            ERRORF("'continue' statement not within a loop.");
         } else {
             emit("JMP_CONTINUE", NULL, NULL, loopScope->starLabel);
         }
@@ -823,18 +823,18 @@ unbraced_stmt:
     }
     | RETURN expr ';' {
         if (currentFunction == NULL) {
-            fprintf(stderr, "Error: 'return' statement not within a function.\n");
+            ERRORF("'return' statement not within a function.");
             // exit(1);
         } else {
             if (currentFunction->returnType == typeVoid) {
-                fprintf(stderr, "Error: 'return' statement with a value in a void function.\n");
+                ERRORF("'return' statement with a value in a void function.");
                 // exit(1);
             }
             canConvertResult res = canConvert($2.val.type, funcType);
             if (res.canConvert) {
                 emit("RETURN", $2.place, NULL, NULL);
             } else {
-                fprintf(stderr, "Error: Return type mismatch. Expected type %d but got type %d.\n", funcType, $2.val.type);
+                ERRORF("Return type mismatch. Expected type %d but got type %d.", funcType, $2.val.type);
             }
         }
         $$ = 1;
@@ -971,7 +971,7 @@ char* createLabel(void) {
 
 void emit(const char *op, const char *arg1, const char *arg2, const char *result) {
     if (quadFile == NULL) {
-        fprintf(stderr, "Error: quad file is not open\n");
+        ERRORF("quad file is not open");
         return;
     }
     fprintf(quadFile, "%s, %s, %s, %s\n", op, arg1 ? arg1 : "NULL", arg2 ? arg2 : "NULL", result ? result : "NULL");
@@ -985,7 +985,7 @@ void yyerror(const char *s) {
 void enterScope(void) {
     symbolTable *newScope = createSymbolTable(currentScope);
     if (newScope == NULL) {
-        fprintf(stderr, "Error: Failed to create new scope.\n");
+        ERRORF("Failed to create new scope.");
         return;
     }
     currentScope = newScope;
@@ -999,7 +999,7 @@ int main(void) {
     globalTable = createSymbolTable(NULL);
 
     if (globalTable == NULL) {
-        fprintf(stderr, "Error: Failed to allocate global symbol table.\n");
+        ERRORF("Failed to allocate global symbol table.");
         return 1;
     }
     currentScope = globalTable;
@@ -1013,8 +1013,14 @@ int main(void) {
         fprintf(stderr, "Error opening quadruples file\n");
         return 1;
     }
+    
+    if (!initDiagnostics(resultErrorFile)) {
+        fprintf(stderr, "Error opening error file\n");
+        return 1;
+    }
     int parseStatus = yyparse();
     printSymbolTable(globalTable, 0);
+    closeDiagnostics();
     fclose(quadFile);
     return parseStatus;
 }

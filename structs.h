@@ -148,4 +148,5 @@ typedef struct
 function *findFunction(symbolTable *table, const char *id);
 function *addFunction(symbolTable *table, const char *id, valType returnType);
 bool addParameterToFunction(function *func, varNode *param);
+varNode *findParameter(function *func, const char *id);
 #endif

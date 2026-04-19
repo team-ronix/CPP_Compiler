@@ -2,6 +2,7 @@
 #define ARITHMETIC_H
 
 #include "../structs.h"
+#include "utils.h"
 
 exprResult arithmeticOperations(valNode *left, valNode *right, const char *op);
 

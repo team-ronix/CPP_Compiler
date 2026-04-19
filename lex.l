@@ -98,14 +98,22 @@ letter  [a-zA-Z]
     return IDENTIFIER;
 }
 
-"/*"(.|\n)*?"*/"   ;
+"/*"([^*]|\*+[^*/])*\*+"/" {
+    int i;
+    for (i = 0; i < yyleng; i++) {
+        if (yytext[i] == '\n') {
+            lineNumber++;
+        }
+    }
+}
+
 
 "//".*   ;
 
 [-()+*/;:{}.,<>=%] { return *yytext; }
 
 
-[ \t\r\n]+ ;
+[ \t\r]+ ;
 
 
 . { yyerror("Unknown character"); }

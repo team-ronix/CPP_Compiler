@@ -1,0 +1,183 @@
+// Working comprehensive test file
+// Goal: cover language features + edge/error cases without causing parser crashes.
+
+// =============================
+// 1) Declarations and types
+// =============================
+int gi = 10;
+float gf = 2.5;
+bool gb = true;
+char gc = 'A';
+string gs = "hello";
+
+int a, b = 3, c;
+float x = 1.5, y;
+
+const int C0 = 7;
+
+// Edge: duplicate variable declaration in same scope
+int dup = 1;
+int dup = 2;
+
+// Edge: const without initialization
+const int mustInit;
+
+// =============================
+// 2) Functions
+// =============================
+int add(int p, int q) {
+    return p + q;
+}
+
+float mix(float n, int m = 2) {
+    float r = n + m;
+    return r;
+}
+
+void logv(int v = 10) {
+    print(v);
+}
+
+// Edge: return value in void function
+void badVoid() {
+    return 5;
+}
+
+// Edge: non-void function may not return on all paths
+int maybeReturn(int z) {
+    if (z > 0) {
+        return z;
+    }
+}
+
+// =============================
+// 3) Expressions and assignment
+// =============================
+int u;
+
+// Edge: used before initialization (warning/error depending on config)
+print(u);
+
+int e1 = 5 + 3 * 2;
+int e2 = (5 + 3) * 2;
+float e3 = 7 / 2.0;
+int e4 = 'B' + 2;
+
+bool c1 = e1 > e2;
+bool c2 = e1 <= e2;
+bool c3 = e1 == e2;
+bool c4 = e1 != e2;
+
+bool l1 = e1 && e2;
+bool l2 = e1 || 0;
+bool l3 = !e1;
+
+// Implicit conversions
+int ci = true;
+float cf = 9;
+bool cb = 4.2;
+
+// Edge: assignment type mismatch
+gs = 123;
+
+// Edge: assignment to undeclared variable
+neverDeclared = 99;
+
+// =============================
+// 4) If / loops / control flow
+// =============================
+if (e1 > e2) {
+    int t = 1;
+    t = t + 1;
+} else {
+    int t = 2;
+    t = t + 2;
+}
+
+if (gi) gi = gi + 1;
+
+int i = 0;
+while (i < 3) {
+    i++;
+    if (i == 2) {
+        continue;
+    }
+    gi = gi + i;
+}
+
+do {
+    i--;
+    if (i == 0) {
+        break;
+    }
+} while (i > -3);
+
+for (int j = 0; j < 4; j++) {
+    if (j == 1) {
+        continue;
+    }
+    if (j == 3) {
+        break;
+    }
+    gi = gi + j;
+}
+
+for (;;) {
+    break;
+}
+
+// Edge: break/continue outside loop
+break;
+continue;
+
+// =============================
+// 5) Switch / case / default
+// =============================
+int sw = 2;
+switch (sw) {
+    case 1:
+        gi = gi + 100;
+        break;
+    case 2:
+        gi = gi + 200;
+    case 3:
+        gi = gi + 300;
+        break;
+    default:
+        gi = gi + 400;
+}
+
+// =============================
+// 6) Function calls
+// =============================
+int r1 = add(1, 2);
+float r2 = mix(2.5);
+logv();
+
+// Edge: too few args
+int badCall1 = add(1);
+
+// Edge: too many args
+int badCall2 = add(1, 2, 3);
+
+// Edge: argument type mismatch
+int badCall3 = add("x", 2);
+
+// Edge: undeclared function
+int badCall4 = missingFunction(1);
+
+// =============================
+// 7) Inc/Dec and constants
+// =============================
+int counter = 0;
+counter++;
+counter--;
+
+const int fixed = 10;
+fixed++;
+
+undeclaredInc++;
+undeclaredDec--;
+
+// Edge: return outside function
+return 123;

@@ -2,3 +2,5 @@
 *.exe
 *.tab.c
 *.tab.h
+errors.txt
+quads.txt

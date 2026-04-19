@@ -311,7 +311,7 @@ symbolTable *findNearestLoopScope(symbolTable *table)
     {
         if (table->isLoopScope)
         {
-            printf("Found loop scope: %s\n", table->id);
+            // printf("Found loop scope: %s\n", table->id);
             return table;
         }
         table = table->parent;
@@ -424,4 +424,22 @@ bool addParameterToFunction(function *func, varNode *param)
         current->paramNext = param;
     }
     return true;
+}
+
+varNode *findParameter(function *func, const char *id)
+{
+    if (func == NULL)
+    {
+        return NULL;
+    }
+    varNode *current = func->parameters;
+    while (current != NULL)
+    {
+        if (strcmp(current->variable.id, id) == 0)
+        {
+            return current;
+        }
+        current = current->paramNext;
+    }
+    return NULL;
 }
