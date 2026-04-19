@@ -373,15 +373,17 @@ CHAINED_DECLARATION:
             // printf("Declaring variable '%s' with initial value.\n", $2);
             valNode val = $3.val;
             if(val.type != currentType) {
-                fprintf(stderr, "Error: Type mismatch for variable '%s'. Expected type %d but got type %d.\n", $2, currentType, val.type);
-                // exit(1);
-            }
-            if(isInCurrentScope(currentScope, $2)) {
-                fprintf(stderr, "Error: Variable '%s' already declared in this scope.\n", $2);
-                // exit(1);
+                // check if we can do implicit conversion from int to float or char to int, etc.
+                canConvertResult convRes = canConvert(val.type, currentType);
+                if(convRes.canConvert) {
+                    val = convertValue(val, currentType);
+                } else {
+                    fprintf(stderr, "Error: Type mismatch for variable '%s'. Expected type %d but got type %d.\n", $2, currentType, val.type);
+                    // exit(1);
+                }
             }
             emit("DECL", $3.place, NULL, $2);
-            addVariableWithValue(currentScope, $2, currentType, isConstDecl, $3.val);
+            addVariableWithValue(currentScope, $2, currentType, false, $3.val);
         }
         else {
             if(isConstDecl) {
