@@ -198,6 +198,7 @@ bool editValue(symbolTable *table, const char *id, const valNode *newValue)
     }
     assignValue(varNode, *newValue, varNode->variable.type);
     varNode->variable.isInitialized = true;
+    varNode->variable.isUsed = true;
     return true;
 }
 
