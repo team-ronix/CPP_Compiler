@@ -35,12 +35,6 @@ int stackIsEmpty(const Stack *s);
 /* Returns the number of elements currently on the stack. */
 int stackSize(const Stack *s);
 
-/* Result of a type-convertibility check */
-typedef struct
-{
-    bool canConvert;
-} canConvertResult;
-
 /*
  * Implicit conversion rules for the compiled language:
  *   int   -> float  (widening)
@@ -54,7 +48,7 @@ typedef struct
  *   bool  -> int    (0 / 1)
  *   bool  -> float  (0.0 / 1.0)
  */
-canConvertResult canConvert(valType from, valType to);
+bool canConvert(valType from, valType to);
 
 /* Convert a valNode to the target type. Assumes canConvert returned true. */
 valNode convertValue(valNode val, valType targetType);

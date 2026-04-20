@@ -263,8 +263,7 @@ FUNCTION_CALL:
             argNode *args = $3;
             while (params != NULL) {
                 if (args != NULL) {
-                    canConvertResult res = canConvert(args->val.type, params->variable.type);
-                    if (!res.canConvert) {
+                    if (!canConvert(args->val.type, params->variable.type)) {
                         ERRORF("Argument type mismatch in function '%s' call. Expected type %d but got type %d.", $1, params->variable.type, args->val.type);
                         callHasErrors = true;
                         break;
@@ -411,8 +410,7 @@ CHAINED_DECLARATION:
                 valNode val = $3.val;
                 if(val.type != currentType) {
                     // check if we can do implicit conversion from int to float or char to int, etc.
-                    canConvertResult convRes = canConvert(val.type, currentType);
-                    if(convRes.canConvert) {
+                    if(canConvert(val.type, currentType)) {
                         val = convertValue(val, currentType);
                     } else {
                         ERRORF("Type mismatch for variable '%s'. Expected type %d but got type %d.", $2, currentType, val.type);
@@ -729,8 +727,7 @@ unbraced_stmt:
             valNode val = $3.val;
             if(val.type != currentType) {
                 // check if we can do implicit conversion from int to float or char to int, etc.
-                canConvertResult convRes = canConvert(val.type, currentType);
-                if(convRes.canConvert) {
+                if(canConvert(val.type, currentType)) {
                     val = convertValue(val, currentType);
                 } else {
                     ERRORF("Type mismatch for variable '%s'. Expected type %d but got type %d.", $2, currentType, val.type);
@@ -830,8 +827,7 @@ unbraced_stmt:
                 ERRORF("'return' statement with a value in a void function.");
                 // exit(1);
             }
-            canConvertResult res = canConvert($2.val.type, funcType);
-            if (res.canConvert) {
+            if (canConvert($2.val.type, funcType)) {
                 emit("RETURN", $2.place, NULL, NULL);
             } else {
                 ERRORF("Return type mismatch. Expected type %d but got type %d.", funcType, $2.val.type);

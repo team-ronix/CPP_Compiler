@@ -104,37 +104,24 @@ int stackSize(const Stack *s)
     return s->top + 1;
 }
 
-canConvertResult canConvert(valType from, valType to)
+bool canConvert(valType from, valType to)
 {
-    canConvertResult res;
-    res.canConvert = false;
-
     if (from == to)
-    {
-        res.canConvert = true;
-        return res;
-    }
+        return true;
 
     switch (from)
     {
     case typeInt:
-        res.canConvert = (to == typeFloat || to == typeBool || to == typeChar);
-        break;
+        return (to == typeFloat || to == typeBool || to == typeChar);
     case typeFloat:
-        res.canConvert = (to == typeInt || to == typeBool);
-        break;
+        return (to == typeInt || to == typeBool);
     case typeChar:
-        res.canConvert = (to == typeInt || to == typeFloat || to == typeBool);
-        break;
+        return (to == typeInt || to == typeFloat || to == typeBool);
     case typeBool:
-        res.canConvert = (to == typeInt || to == typeFloat);
-        break;
+        return (to == typeInt || to == typeFloat);
     default:
-        res.canConvert = false;
-        break;
+        return false;
     }
-
-    return res;
 }
 
 valNode convertValue(valNode val, valType targetType)
