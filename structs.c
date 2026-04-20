@@ -237,7 +237,7 @@ void printSymbolTable(symbolTable *table, int level)
     while (current != NULL)
     {
         printf("ID: %s | Type: %s | Const: %d | Init: %d | Used: %d\n",
-               current->variable.id,
+               current->variable.originalId,
                valTypeToString(current->variable.type),
                current->variable.isConst,
                current->variable.isInitialized,
@@ -374,7 +374,7 @@ symbolTable *createSymbolTable(symbolTable *parent)
 {
     static int counter = 0;
     char id[50];
-    sprintf(id, "S_%d", counter++);
+    sprintf(id, "%d", counter++);
 
     symbolTable *newTable = (symbolTable *)malloc(sizeof(symbolTable));
     if (newTable == NULL)

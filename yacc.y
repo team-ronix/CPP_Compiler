@@ -167,7 +167,7 @@ PARAMETER:
                         ERRORF("Failed to add parameter '%s' to function.", $2);
                     } else {
                         param->variable.isInitialized = true;
-                        emit("PARAM", $3.hasValue ? $3.place : NULL, NULL, $2);
+                        emit("PARAM", $3.hasValue ? $3.place : NULL, NULL, param->variable.id);
                     }
                 }
             }
@@ -352,7 +352,7 @@ FOR_INIT:
             if(!editValue(currentScope, $1, &$3.val)) {
                 ERRORF("Failed to assign value to variable '%s'.", $1);
             } else {
-                emit("=", $3.place, NULL, var->variable.id);
+                emit("ASSIGN", $3.place, NULL, var->variable.id);
                 var->variable.isInitialized = true;
             }
         }
@@ -389,7 +389,7 @@ expr_opt:
             if(!editValue(currentScope, $1, &$3.val)) {
                 ERRORF("Failed to assign value to variable '%s'.", $1);
             }else {
-                emit("=", $3.place, NULL, var->variable.id);
+                emit("ASSIGN", $3.place, NULL, var->variable.id);
                 var->variable.isInitialized = true;
             }
         }
@@ -715,7 +715,7 @@ switch_prefix:
         sw->switchExpr = strdup($3.place);
         sw->matchedVar = tempResult();
         
-        emit("=", "false", NULL, sw->matchedVar);
+        emit("ASSIGN", "false", NULL, sw->matchedVar);
         
         stackPush(&switchStack, sw);
     }
@@ -803,7 +803,7 @@ unbraced_stmt:
                 ERRORF("Failed to assign value to variable '%s'.", $1);
                 // exit(1);
             }else {
-                emit("=", $3.place, NULL, var->variable.id);
+                emit("ASSIGN", $3.place, NULL, var->variable.id);
                 var->variable.isInitialized = true;
             }
         }
@@ -954,7 +954,7 @@ CASE_ITEM:
         emit("IF_FALSE", cmpRes, NULL, l_next_case);
         
         // Cond matched! Set flag
-        emit("=", "true", NULL, sw->matchedVar);
+        emit("ASSIGN", "true", NULL, sw->matchedVar);
         
         emit("LABEL", NULL, NULL, l_body);
         $<sValue>$ = l_next_case;
