@@ -76,7 +76,7 @@ Stack switchStack;
 %type <exprNode> FUNCTION_CALL
 %type <argList> ARG_LIST
 %type <exprNode> for_cond_opt
-%type <bValue> BLOCK_STMT_LIST BLOCK branch_stmt single_if if_else stmt unscoped_stmt unbraced_stmt
+%type <bValue> BLOCK_STMT_LIST BLOCK branch_stmt single_if if_else stmt unscoped_stmt unbraced_stmt DECLARATION
 %token INT FLOAT BOOL CHAR STRING
 %token IF ELSE FOR WHILE SWITCH CASE DO BREAK CONTINUE RETURN DEFAULT
 %token PRINT
@@ -110,9 +110,81 @@ top_level_list:
     | top_level_list top_level_item
 ;
 
+DECLARATION: 
+    TYPE IDENTIFIER ASSIGNMENT CHAINED_DECLARATION ';' {
+            bool hasError = false;
+            if(isInCurrentScope(currentScope, $2)) {
+                ERRORF("Variable '%s' already declared in this scope.", $2);
+                hasError = true;
+            }
+        
+            if($3.hasValue) {
+                valNode val = $3.val;
+                if(val.type != currentType) {
+                    // check if we can do implicit conversion from int to float or char to int, etc.
+                    if(canConvert(val.type, currentType)) {
+                        val = convertValue(val, currentType);
+                    } else {
+                        ERRORF("Type mismatch for variable '%s'. Expected type %d but got type %d.", $2, currentType, val.type);
+                        hasError = true;
+                    }
+                }
+                if(!hasError) {
+                    // printf("Declaring variable '%s' with initial value.\n", $2);
+                    char *varName = generateVarName($2, currentScope->id);
+                    emit("DECL", $3.place, NULL, varName);
+                    addVariableWithValue(currentScope, varName, $2, currentType, false, $3.val);      
+                    free(varName);
+                }
+            }
+            else {
+                // printf("Declaring variable '%s' without initial value.\n", $2);
+                char *varName = generateVarName($2, currentScope->id);
+                emit("DECL", NULL, NULL, varName);
+                addVariable(currentScope, varName, $2, currentType);
+                free(varName);
+            }
+            currentType = noType;
+            $$ = 0;
+    }
+    | CONST_TYPE TYPE IDENTIFIER ASSIGNMENT CHAINED_DECLARATION ';' {
+        valNode val = $4.val;
+        bool hasError = false;
+
+        if(isInCurrentScope(currentScope, $3)) {
+            ERRORF("Variable '%s' already declared in this scope.", $3);
+            // exit(1);
+            hasError = true;
+        }
+        if(!$4.hasValue && hasError == false) {
+            ERRORF("Constant variable '%s' must be initialized.", $3);
+            // exit(1);
+            hasError = true;
+        }
+        if(val.type != currentType && hasError == false) {
+            ERRORF("Type mismatch for variable '%s'. Expected type %d but got type %d.", $3, currentType, val.type);
+            hasError = true;
+        }
+        if (!hasError) {
+            // printf("Declaring constant variable '%s' with initial value.\n", $3);
+            char *varName = generateVarName($3, currentScope->id);
+            addVariableWithValue(currentScope, varName, $3, currentType, true, $4.val); 
+            emit("CONST", $4.place, NULL, varName);
+            free(varName);
+            isConstDecl = false;
+            currentType = noType;
+        }  
+        $$ = 0;
+    }
+;
+
 top_level_item:
-      stmt
+    DECLARATION
     | FUNCTION
+    | error ';' {
+        ERRORF("At global scope, you can only declare functions or variables.");
+        yyerrok;
+    }
 ;
 
 TYPE:
@@ -733,71 +805,8 @@ unbraced_stmt:
             emit("PRINT", $3.place, NULL, NULL);
             $$ = 0;
          }
-        | TYPE IDENTIFIER ASSIGNMENT CHAINED_DECLARATION ';' {
-            bool hasError = false;
-            if(isInCurrentScope(currentScope, $2)) {
-                ERRORF("Variable '%s' already declared in this scope.", $2);
-                hasError = true;
-            }
-        
-        if($3.hasValue) {
-            valNode val = $3.val;
-            if(val.type != currentType) {
-                // check if we can do implicit conversion from int to float or char to int, etc.
-                if(canConvert(val.type, currentType)) {
-                    val = convertValue(val, currentType);
-                } else {
-                    ERRORF("Type mismatch for variable '%s'. Expected type %d but got type %d.", $2, currentType, val.type);
-                    hasError = true;
-                }
-            }
-            if(!hasError) {
-                // printf("Declaring variable '%s' with initial value.\n", $2);
-                char *varName = generateVarName($2, currentScope->id);
-                emit("DECL", $3.place, NULL, varName);
-                addVariableWithValue(currentScope, varName, $2, currentType, false, $3.val);      
-                free(varName);
-            }
-        }
-        else {
-            // printf("Declaring variable '%s' without initial value.\n", $2);
-            char *varName = generateVarName($2, currentScope->id);
-            emit("DECL", NULL, NULL, varName);
-            addVariable(currentScope, varName, $2, currentType);
-            free(varName);
-        }
-        currentType = noType;
-        $$ = 0;
-    }
-    | CONST_TYPE TYPE IDENTIFIER ASSIGNMENT CHAINED_DECLARATION ';' {
-        valNode val = $4.val;
-        bool hasError = false;
-
-        if(isInCurrentScope(currentScope, $3)) {
-            ERRORF("Variable '%s' already declared in this scope.", $3);
-            // exit(1);
-            hasError = true;
-        }
-        if(!$4.hasValue && hasError == false) {
-            ERRORF("Constant variable '%s' must be initialized.", $3);
-            // exit(1);
-            hasError = true;
-        }
-        if(val.type != currentType && hasError == false) {
-            ERRORF("Type mismatch for variable '%s'. Expected type %d but got type %d.", $3, currentType, val.type);
-            hasError = true;
-        }
-        if (!hasError) {
-            // printf("Declaring constant variable '%s' with initial value.\n", $3);
-            char *varName = generateVarName($3, currentScope->id);
-            addVariableWithValue(currentScope, varName, $3, currentType, true, $4.val); 
-            emit("CONST", $4.place, NULL, varName);
-            free(varName);
-            isConstDecl = false;
-            currentType = noType;
-        }  
-        $$ = 0;
-    }
+    |
+    DECLARATION
     | IDENTIFIER '=' expr ';' {
         varNode *var = findVariable(currentScope, $1);
         if(!var) {
