@@ -24,7 +24,7 @@ valType funcType = noType;
 bool isConstDecl = false;
 int resultCounter = 0;
 int labelsCounter = 0;
-const char *resultQuadFile = "quads.txt";
+const char *resultQuadFile  = "quads.txt";
 const char *resultErrorFile = "errors.txt";
 FILE *quadFile = NULL;
 char* startLabel = NULL;
@@ -152,9 +152,13 @@ PARAMETER:
             varNode *param = findParameter(currentFunction, $2);
             if (param == NULL) {
                 if ($3.hasValue) {
-                    param = addVariableWithValue(currentScope, $2, currentType, false, $3.val);
+                    char *paramName = generateVarName($2, currentScope->id);
+                    param = addVariableWithValue(currentScope, paramName, $2, currentType, false, $3.val);
+                    free(paramName);
                 } else {
-                    param = addVariable(currentScope, $2, currentType);
+                    char *paramName = generateVarName($2, currentScope->id);
+                    param = addVariable(currentScope, paramName, $2, currentType);
+                    free(paramName);
                 }
                 if (param == NULL) {
                     ERRORF("Failed to declare parameter '%s'.", $2);
@@ -173,16 +177,17 @@ PARAMETER:
 
 FUNCTION:
     TYPE IDENTIFIER '('{
-        function* func = findFunction(currentScope, $2);
-        if (func != NULL) {
+        functionNode * funcNode = findFunction(currentScope, $2);
+        if (funcNode != NULL) {
             ERRORF("Function '%s' already declared in this scope.", $2);
             // exit(1);
         } else {
-            func = addFunction(currentScope, $2, currentType);
-            if(func == NULL) {
+            functionNode * funcNode = addFunction(currentScope, $2, currentType);
+            if(funcNode == NULL) {
                 ERRORF("declaring function");
                 // exit(1);
             } else {
+                function *func = &funcNode->func;
                 currentFunction = func;
                 enterScope();
                 func->scope = currentScope;
@@ -254,10 +259,12 @@ FUNCTION_CALL:
         $$.val.type = noType;
         $$.val.value.iValue = 0;
 
-        function *func = findFunction(currentScope, $1);
-        if (func == NULL) {
+        functionNode *funcNode = findFunction(currentScope, $1);
+        
+        if (funcNode == NULL) {
             ERRORF("Function '%s' not declared.", $1);
         } else {
+            function *func = &funcNode->func;
             bool callHasErrors = false;
             varNode *params = func->parameters;
             argNode *args = $3;
@@ -330,8 +337,10 @@ FOR_INIT:
         if(isInCurrentScope(currentScope, $2)) {
             ERRORF("Variable '%s' already declared in this scope.", $2);
         } else {
-            emit("DECL", $4.place, NULL, $2);
-            addVariableWithValue(currentScope, $2, currentType, false, $4.val);
+            char *varName = generateVarName($2, currentScope->id);
+            emit("DECL", $4.place, NULL, varName);
+            addVariableWithValue(currentScope, varName, $2, currentType, false, $4.val);
+            free(varName);
         }
         currentType = noType;
     }
@@ -343,7 +352,7 @@ FOR_INIT:
             if(!editValue(currentScope, $1, &$3.val)) {
                 ERRORF("Failed to assign value to variable '%s'.", $1);
             } else {
-                emit("=", $3.place, NULL, $1);
+                emit("=", $3.place, NULL, var->variable.id);
                 var->variable.isInitialized = true;
             }
         }
@@ -380,7 +389,7 @@ expr_opt:
             if(!editValue(currentScope, $1, &$3.val)) {
                 ERRORF("Failed to assign value to variable '%s'.", $1);
             }else {
-                emit("=", $3.place, NULL, $1);
+                emit("=", $3.place, NULL, var->variable.id);
                 var->variable.isInitialized = true;
             }
         }
@@ -417,8 +426,10 @@ CHAINED_DECLARATION:
                         // exit(1);
                     }
                 }
-                emit("DECL", $3.place, NULL, $2);
-                addVariableWithValue(currentScope, $2, currentType, false, $3.val);
+                char *varName = generateVarName($2, currentScope->id);
+                emit("DECL", $3.place, NULL, varName);
+                addVariableWithValue(currentScope, varName, $2, currentType, false, $3.val);
+                free(varName);
             }
             else {
                 if(isConstDecl) {
@@ -426,8 +437,10 @@ CHAINED_DECLARATION:
                     // exit(1);
                 }
                 // printf("Declaring variable '%s' without initial value.\n", $2);
-                emit("DECL", NULL, NULL, $2);
-                addVariable(currentScope, $2, currentType);
+                char *varName = generateVarName($2, currentScope->id);
+                emit("DECL", NULL, NULL, varName);
+                addVariable(currentScope, varName, $2, currentType);
+                free(varName);
             }
         }
     }
@@ -446,13 +459,12 @@ expr:
         } else {
             if (!var->variable.isInitialized) {
                 WARNF("Variable '%s' is used before initialization.", $1);
-                // // exit(1);
             }
             var->variable.isUsed = true;
-            char buffer[20];
-            sprintf(buffer, "%s", $1);
-            $$.place = strdup(buffer);
+            char* varName = generateVarName($1, var->scope->id);
+            $$.place = strdup(varName);
             $$.val = varToValNode(var);
+            free(varName);
         }
     }
     | INTEGER    {
@@ -736,14 +748,18 @@ unbraced_stmt:
             }
             if(!hasError) {
                 // printf("Declaring variable '%s' with initial value.\n", $2);
-                emit("DECL", $3.place, NULL, $2);
-                addVariableWithValue(currentScope, $2, currentType, false, $3.val);      
+                char *varName = generateVarName($2, currentScope->id);
+                emit("DECL", $3.place, NULL, varName);
+                addVariableWithValue(currentScope, varName, $2, currentType, false, $3.val);      
+                free(varName);
             }
         }
         else {
             // printf("Declaring variable '%s' without initial value.\n", $2);
-            emit("DECL", NULL, NULL, $2);
-            addVariable(currentScope, $2, currentType);
+            char *varName = generateVarName($2, currentScope->id);
+            emit("DECL", NULL, NULL, varName);
+            addVariable(currentScope, varName, $2, currentType);
+            free(varName);
         }
         currentType = noType;
         $$ = 0;
@@ -768,8 +784,10 @@ unbraced_stmt:
         }
         if (!hasError) {
             // printf("Declaring constant variable '%s' with initial value.\n", $3);
-            addVariableWithValue(currentScope, $3, currentType, true, $4.val); 
-            emit("CONST", $4.place, NULL, $3);
+            char *varName = generateVarName($3, currentScope->id);
+            addVariableWithValue(currentScope, varName, $3, currentType, true, $4.val); 
+            emit("CONST", $4.place, NULL, varName);
+            free(varName);
             isConstDecl = false;
             currentType = noType;
         }  
@@ -785,7 +803,7 @@ unbraced_stmt:
                 ERRORF("Failed to assign value to variable '%s'.", $1);
                 // exit(1);
             }else {
-                emit("=", $3.place, NULL, $1);
+                emit("=", $3.place, NULL, var->variable.id);
                 var->variable.isInitialized = true;
             }
         }
@@ -991,7 +1009,10 @@ void exitScope(void) {
     currentScope = currentScope->parent;
 }
 
-int main(void) {
+int main(int argc, char *argv[]) {
+    if (argc >= 2) resultQuadFile  = argv[1];
+    if (argc >= 3) resultErrorFile = argv[2];
+
     globalTable = createSymbolTable(NULL);
 
     if (globalTable == NULL) {
@@ -1016,6 +1037,7 @@ int main(void) {
     }
     int parseStatus = yyparse();
     printSymbolTable(globalTable, 0);
+    checkForUnusedVariables(globalTable);
     closeDiagnostics();
     fclose(quadFile);
     return parseStatus;

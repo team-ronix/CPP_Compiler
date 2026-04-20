@@ -2,50 +2,71 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include "handlers/utils.h"
+
+extern int lineNumber;
+
+char *generateVarName(const char *baseName, const char *scopeId)
+{
+    size_t len = strlen(baseName) + strlen(scopeId) + 2; // +1 for '_' and +1 for null terminator
+    char *varName = malloc(len);
+    if (varName)
+    {
+        snprintf(varName, len, "%s_%s", baseName, scopeId);
+    }
+    return varName;
+}
+
 varNode *findVariable(symbolTable *table, const char *id)
 {
     while (table != NULL)
     {
         varNode *current = table->variables;
+        char *varName = generateVarName(id, table->id);
         while (current != NULL)
         {
-            if (strcmp(current->variable.id, id) == 0)
+            if (strcmp(current->variable.id, varName) == 0)
             {
+                free(varName);
                 return current;
             }
             current = current->next;
         }
+        free(varName);
         table = table->parent;
     }
+
     return NULL;
 }
 
 void assignValue(varNode *varNode, valNode value, valType type)
 {
-    // switch (type)
-    // {
-    // case typeInt:
-    //     varNode->variable.value.iValue = value.value.iValue;
-    //     break;
-    // case typeFloat:
-    //     varNode->variable.value.fValue = value.value.fValue;
-    //     break;
-    // case typeBool:
-    //     varNode->variable.value.bValue = value.value.bValue;
-    //     break;
-    // case typeChar:
-    //     varNode->variable.value.cValue = value.value.cValue;
-    //     break;
-    // case typeString:
-    //     if (value.value.sValue != NULL)
-    //         varNode->variable.value.sValue = strdup(value.value.sValue);
-    //     else
-    //         varNode->variable.value.sValue = NULL;
-    //     break;
-    // }
+    switch (type)
+    {
+    case typeInt:
+        varNode->variable.value.iValue = value.value.iValue;
+        break;
+    case typeFloat:
+        varNode->variable.value.fValue = value.value.fValue;
+        break;
+    case typeBool:
+        varNode->variable.value.bValue = value.value.bValue;
+        break;
+    case typeChar:
+        varNode->variable.value.cValue = value.value.cValue;
+        break;
+    case typeString:
+        if (value.value.sValue != NULL)
+            varNode->variable.value.sValue = strdup(value.value.sValue);
+        else
+            varNode->variable.value.sValue = NULL;
+        break;
+    default:
+        break;
+    }
 }
 
-varNode *addVariable(symbolTable *table, const char *id, valType type)
+varNode *addVariable(symbolTable *table, const char *id, const char *originalId, valType type)
 {
     if (isInCurrentScope(table, id))
     {
@@ -54,12 +75,14 @@ varNode *addVariable(symbolTable *table, const char *id, valType type)
 
     varNode *newVar = (varNode *)malloc(sizeof(varNode));
     newVar->variable.id = strdup(id);
+    newVar->variable.originalId = strdup(originalId);
     newVar->variable.type = type;
     newVar->next = NULL;
     newVar->paramNext = NULL;
     newVar->variable.isConst = false;
     newVar->variable.isInitialized = false;
     newVar->variable.isUsed = false;
+    newVar->variable.lineNumber = lineNumber;
 
     if (table->variables == NULL)
     {
@@ -79,9 +102,9 @@ varNode *addVariable(symbolTable *table, const char *id, valType type)
     return newVar;
 }
 
-varNode *addVariableWithValue(symbolTable *table, const char *id, valType type, bool isConst, valNode value)
+varNode *addVariableWithValue(symbolTable *table, const char *id, const char *originalId, valType type, bool isConst, valNode value)
 {
-    varNode *newVar = addVariable(table, id, type);
+    varNode *newVar = addVariable(table, id, originalId, type);
     if (newVar == NULL)
     {
         return NULL;
@@ -100,7 +123,7 @@ bool isInCurrentScope(symbolTable *table, const char *id)
     varNode *current = table->variables;
     while (current != NULL)
     {
-        if (strcmp(current->variable.id, id) == 0)
+        if (strcmp(current->variable.originalId, id) == 0)
         {
             return true;
         }
@@ -126,6 +149,7 @@ bool removeVariable(symbolTable *table, const char *id)
                 prev->next = current->next;
             }
             free(current->variable.id);
+            free(current->variable.originalId);
             free(current);
             return true;
         }
@@ -225,6 +249,33 @@ void printSymbolTable(symbolTable *table, int level)
     while (child != NULL)
     {
         printSymbolTable(child, level + 1);
+        child = child->nextSibling;
+    }
+}
+
+void checkForUnusedVariables(symbolTable *table)
+{
+    if (table == NULL)
+    {
+        return;
+    }
+    varNode *current = table->variables;
+    while (current != NULL)
+    {
+        if (!current->variable.isUsed)
+        {
+            char buffer[512];
+            snprintf(buffer, sizeof(buffer), "Variable '%s' declared but never used. Declared at line %d.",
+                     current->variable.originalId ? current->variable.originalId : current->variable.id,
+                     current->variable.lineNumber);
+            warningMessage(buffer, false);
+        }
+        current = current->next;
+    }
+    symbolTable *child = table->firstChild;
+    while (child != NULL)
+    {
+        checkForUnusedVariables(child);
         child = child->nextSibling;
     }
 }
@@ -336,6 +387,8 @@ symbolTable *createSymbolTable(symbolTable *parent)
     newTable->nextSibling = NULL;
     newTable->firstChild = NULL;
     newTable->isLoopScope = false;
+    newTable->functions = NULL;
+    newTable->isFunctionScope = false;
 
     if (parent != NULL)
     {
@@ -356,7 +409,7 @@ symbolTable *createSymbolTable(symbolTable *parent)
     return newTable;
 }
 
-function *findFunction(symbolTable *table, const char *id)
+functionNode *findFunction(symbolTable *table, const char *id)
 {
     while (table != NULL)
     {
@@ -365,7 +418,7 @@ function *findFunction(symbolTable *table, const char *id)
         {
             if (strcmp(current->func.id, id) == 0)
             {
-                return &current->func;
+                return current;
             }
             current = current->next;
         }
@@ -374,7 +427,7 @@ function *findFunction(symbolTable *table, const char *id)
     return NULL;
 }
 
-function *addFunction(symbolTable *table, const char *id, valType returnType)
+functionNode *addFunction(symbolTable *table, const char *id, valType returnType)
 {
     if (findFunction(table, id) != NULL)
     {
@@ -400,7 +453,7 @@ function *addFunction(symbolTable *table, const char *id, valType returnType)
         }
         current->next = newFuncNode;
     }
-    return &newFuncNode->func;
+    return newFuncNode;
 }
 
 bool addParameterToFunction(function *func, varNode *param)
@@ -435,7 +488,7 @@ varNode *findParameter(function *func, const char *id)
     varNode *current = func->parameters;
     while (current != NULL)
     {
-        if (strcmp(current->variable.id, id) == 0)
+        if (strcmp(current->variable.originalId ? current->variable.originalId : current->variable.id, id) == 0)
         {
             return current;
         }

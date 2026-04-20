@@ -48,6 +48,8 @@ typedef struct
 {
     valType type;
     char *id;
+    char * originalId;
+    int lineNumber;
     union
     {
         int iValue;
@@ -119,9 +121,10 @@ typedef struct quadruple
     char *result;
 } quadruple;
 
+char *generateVarName(const char *baseName, const char *scopeId);
 varNode *findVariable(symbolTable *table, const char *id);
-varNode *addVariable(symbolTable *table, const char *id, valType type);
-varNode *addVariableWithValue(symbolTable *table, const char *id, valType type, bool isConst, valNode value);
+varNode *addVariable(symbolTable *table, const char *id, const char *originalId, valType type);
+varNode *addVariableWithValue(symbolTable *table, const char *id, const char *originalId, valType type, bool isConst, valNode value);
 bool removeVariable(symbolTable *table, const char *id);
 void assignValue(varNode *varNode, valNode value, valType type);
 bool editValue(symbolTable *table, const char *id, const valNode *newValue);
@@ -145,8 +148,9 @@ typedef struct
     char *matchedVar;
 } SwitchStorage;
 
-function *findFunction(symbolTable *table, const char *id);
-function *addFunction(symbolTable *table, const char *id, valType returnType);
+functionNode *findFunction(symbolTable *table, const char *id);
+functionNode *addFunction(symbolTable *table, const char *id, valType returnType);
 bool addParameterToFunction(function *func, varNode *param);
+void checkForUnusedVariables(symbolTable *table);
 varNode *findParameter(function *func, const char *id);
 #endif

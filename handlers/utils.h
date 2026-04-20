@@ -56,7 +56,7 @@ valNode convertValue(valNode val, valType targetType);
 int initDiagnostics(const char *errorFilePath);
 void closeDiagnostics(void);
 void errorMessage(const char *message);
-void warningMessage(const char *message);
+void warningMessage(const char *message, bool printLineNumber);
 
 #define ERRORF(...)                                              \
     do                                                           \
@@ -71,7 +71,7 @@ void warningMessage(const char *message);
     {                                                                \
         char warningBuffer[512];                                     \
         snprintf(warningBuffer, sizeof(warningBuffer), __VA_ARGS__); \
-        warningMessage(warningBuffer);                               \
+        warningMessage(warningBuffer, true);                               \
     } while (0)
 
 #endif

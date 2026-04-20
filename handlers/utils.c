@@ -39,14 +39,21 @@ void errorMessage(const char *message)
     fflush(diagnosticsFile);
 }
 
-void warningMessage(const char *message)
+void warningMessage(const char *message, bool printLineNumber)
 {
     if (diagnosticsFile == NULL)
     {
         fprintf(stderr, "Warning: diagnostics file is not open\n");
         return;
     }
-    fprintf(diagnosticsFile, "Warning: %s at line %d\n", message, lineNumber);
+    if (printLineNumber)
+    {
+        fprintf(diagnosticsFile, "Warning: %s at line %d\n", message, lineNumber);
+    }
+    else
+    {
+        fprintf(diagnosticsFile, "Warning: %s\n", message);
+    }
     fflush(diagnosticsFile);
 }
 
