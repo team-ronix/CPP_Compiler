@@ -121,15 +121,27 @@ varNode *addVariableWithValue(symbolTable *table, const char *id, const char *or
 bool isInCurrentScope(symbolTable *table, const char *id)
 {
     varNode *current = table->variables;
+    functionNode *currentFunc = table->functions;
+    bool found = false;
     while (current != NULL)
     {
         if (strcmp(current->variable.originalId, id) == 0)
         {
-            return true;
+            found = true;
+            break;
         }
         current = current->next;
     }
-    return false;
+    while (currentFunc != NULL)
+    {
+        if (strcmp(currentFunc->func.id, id) == 0)
+        {
+            found = true;
+            break;
+        }
+        currentFunc = currentFunc->next;
+    }
+    return found;
 }
 
 bool removeVariable(symbolTable *table, const char *id)

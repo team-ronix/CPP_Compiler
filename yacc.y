@@ -178,8 +178,13 @@ PARAMETER:
 FUNCTION:
     TYPE IDENTIFIER '('{
         functionNode * funcNode = findFunction(currentScope, $2);
+        // or check if there's a variable with the same name since they share the same namespace
+        varNode *varNode = findVariable(currentScope, $2);
         if (funcNode != NULL) {
             ERRORF("Function '%s' already declared in this scope.", $2);
+            // exit(1);
+        }else if (varNode != NULL) {
+            ERRORF("Variable '%s' already declared in this scope.", $2);
             // exit(1);
         } else {
             functionNode * funcNode = addFunction(currentScope, $2, currentType);
