@@ -994,6 +994,9 @@ void emit(const char *op, const char *arg1, const char *arg2, const char *result
 
 void yyerror(const char *s) {
     fprintf(stderr, "Syntax error: %s\n", s);
+    char message[1024];
+    sprintf(message, "Syntax error: %s", s);
+    ERRORF(message);
 }
 
 void enterScope(void) {
@@ -1040,5 +1043,5 @@ int main(int argc, char *argv[]) {
     checkForUnusedVariables(globalTable);
     closeDiagnostics();
     fclose(quadFile);
-    return parseStatus;
+    return 0;
 }

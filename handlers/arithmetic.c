@@ -118,7 +118,7 @@ void handleIncDec(symbolTable *scope, const char *id, const char *op)
     valNode one;
     one.type = typeInt;
     one.value.iValue = 1;
-    emit(op, NULL, NULL, id);
+    emit(op, NULL, NULL, var->variable.id);
     if (!editValue(scope, id, &one))
     {
         fprintf(stderr, "Error: Failed to %s variable '%s'.\n",
