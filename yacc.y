@@ -111,7 +111,7 @@ top_level_list:
 ;
 
 DECLARATION: 
-    TYPE IDENTIFIER ASSIGNMENT CHAINED_DECLARATION ';' {
+    TYPE IDENTIFIER ASSIGNMENT {
             bool hasError = false;
             if(isInCurrentScope(currentScope, $2)) {
                 ERRORF("Variable '%s' already declared in this scope.", $2);
@@ -144,10 +144,11 @@ DECLARATION:
                 addVariable(currentScope, varName, $2, currentType);
                 free(varName);
             }
-            currentType = noType;
-            $$ = 0;
+    } CHAINED_DECLARATION ';' {
+        $$ = 0;
+        currentType = noType;
     }
-    | CONST_TYPE TYPE IDENTIFIER ASSIGNMENT CHAINED_DECLARATION ';' {
+    | CONST_TYPE TYPE IDENTIFIER ASSIGNMENT {
         valNode val = $4.val;
         bool hasError = false;
 
@@ -171,10 +172,11 @@ DECLARATION:
             addVariableWithValue(currentScope, varName, $3, currentType, true, $4.val); 
             emit("CONST", $4.place, NULL, varName);
             free(varName);
-            isConstDecl = false;
-            currentType = noType;
         }  
+    } CHAINED_DECLARATION ';' {
         $$ = 0;
+        isConstDecl = false;
+        currentType = noType;
     }
 ;
 
@@ -486,7 +488,7 @@ ASSIGNMENT:
     
 CHAINED_DECLARATION:
     /* empty */
-    | ',' IDENTIFIER ASSIGNMENT CHAINED_DECLARATION {
+    | ',' IDENTIFIER ASSIGNMENT  {
         if(isInCurrentScope(currentScope, $2)) {
             ERRORF("Variable '%s' already declared in this scope.", $2);
             // exit(1);
@@ -520,7 +522,7 @@ CHAINED_DECLARATION:
                 free(varName);
             }
         }
-    }
+    } CHAINED_DECLARATION
 ;
 
 expr:
