@@ -50,12 +50,12 @@ letter  [a-zA-Z]
 "--" { return DEC; }
 
 
-{digit}+\.{digit}+ {
+\-?{digit}+\.{digit}+ {
     yylval.fValue = atof(yytext);
     return FLOATING;
 }
 
-{digit}+ {
+\-?{digit}+ {
     yylval.iValue = atoi(yytext);
     return INTEGER;
 }

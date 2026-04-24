@@ -603,23 +603,30 @@ expr:
         $$.val = node;
     }
     | '-' expr %prec UMINUS {
-        if ($2.val.type != typeInt && $2.val.type != typeFloat && $2.val.type != typeChar) {
-            ERRORF("Unary '-' operator requires numeric operand.");
-        } else {
-            valNode resultNode;
-            resultNode.type = $2.val.type;
-            if ($2.val.type == typeInt) {
-                resultNode.value.iValue = -$2.val.value.iValue;
-            } else if ($2.val.type == typeFloat) {
-                resultNode.value.fValue = -$2.val.value.fValue;
-            } else if ($2.val.type == typeChar) {
-                resultNode.type = typeInt; // Promote char to int for negation
-                resultNode.value.iValue = -(int)$2.val.value.cValue;
-            }
-            char buffer[20];
-            sprintf(buffer, "-%s", $2.place);
-            $$.place = strdup(buffer);
-            $$.val = resultNode;
+        // if ($2.val.type != typeInt && $2.val.type != typeFloat && $2.val.type != typeChar) {
+        //     ERRORF("Unary '-' operator requires numeric operand.");
+        // } else {
+        //     valNode resultNode;
+        //     resultNode.type = $2.val.type;
+        //     if ($2.val.type == typeInt) {
+        //         resultNode.value.iValue = -$2.val.value.iValue;
+        //     } else if ($2.val.type == typeFloat) {
+        //         resultNode.value.fValue = -$2.val.value.fValue;
+        //     } else if ($2.val.type == typeChar) {
+        //         resultNode.type = typeInt; // Promote char to int for negation
+        //         resultNode.value.iValue = -(int)$2.val.value.cValue;
+        //     }
+        //     char buffer[20];
+        //     sprintf(buffer, "-%s", $2.place);
+        //     $$.place = strdup(buffer);
+        //     $$.val = resultNode;
+        // }
+        valNode negativeOne = {.type = typeInt, .value.iValue = -1};
+        exprResult res = arithmeticOperations(&negativeOne, &$2.val, "*");
+        if(!res.error) {
+            emit("NEG", $2.place, strdup("NULL"),  res.place);
+            $$.place = res.place;
+            $$.val = res.value;
         }
     }
     | expr '+' expr {
