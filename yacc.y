@@ -951,6 +951,11 @@ unbraced_stmt:
         free(sw);
         $$ = 0;
     }
+    | error ';' {
+        ERRORF("Invalid statement.");
+        yyerrok;
+        $$ = 0;
+    }
     ;
 
 CASE_LIST:
