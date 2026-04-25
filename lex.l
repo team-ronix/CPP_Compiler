@@ -93,7 +93,7 @@ letter  [a-zA-Z]
     return STRING_LITERAL;
 }
 
-{letter}({letter}|{digit})* {
+({letter}|_)({letter}|{digit}|_)* {
     yylval.sValue = strdup(yytext);
     return IDENTIFIER;
 }
