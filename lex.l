@@ -48,6 +48,11 @@ letter  [a-zA-Z]
 
 "++" { return INC; }
 "--" { return DEC; }
+"+=" { return PLUS_ASSIGN; }
+"-=" { return MINUS_ASSIGN; }
+"*=" { return MUL_ASSIGN; }
+"/=" { return DIV_ASSIGN; }
+
 
 
 \-?{digit}+\.{digit}+ {

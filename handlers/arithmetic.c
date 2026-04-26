@@ -15,14 +15,14 @@ exprResult arithmeticOperations(valNode *left, valNode *right, const char *op)
     if (left->type != typeInt && left->type != typeFloat && left->type != typeChar)
     {
         res.error = true;
-        fprintf(stderr, "Error: Unsupported type %d for left operand in '%s'.\n", left->type, op);
+        ERRORF("Unsupported type %d for left operand in '%s'.", left->type, op);
         res.place = NULL;
         return res;
     }
     if (right->type != typeInt && right->type != typeFloat && right->type != typeChar)
     {
         res.error = true;
-        fprintf(stderr, "Error: Unsupported type %d for right operand in '%s'.\n", right->type, op);
+        ERRORF("Unsupported type %d for right operand in '%s'.", right->type, op);
         res.place = NULL;
         return res;
     }
@@ -47,7 +47,7 @@ exprResult arithmeticOperations(valNode *left, valNode *right, const char *op)
         if ((leftIsFloat || rightIsFloat) ? (rFloat == 0.0f) : (rInt == 0))
         {
             res.error = true;
-            fprintf(stderr, "Error: Division by zero.\n");
+            ERRORF("Division by zero error in '%s' operation.", op);
             res.place = NULL;
             return res;
         }
@@ -69,7 +69,7 @@ exprResult arithmeticOperations(valNode *left, valNode *right, const char *op)
         else
         {
             res.error = true;
-            fprintf(stderr, "Error: Unknown operator '%s'.\n", op);
+            ERRORF("Unknown operator '%s'.", op);
             res.place = NULL;
             return res;
         }
@@ -88,7 +88,7 @@ exprResult arithmeticOperations(valNode *left, valNode *right, const char *op)
         else
         {
             res.error = true;
-            fprintf(stderr, "Error: Unknown operator '%s'.\n", op);
+            ERRORF("Unknown operator '%s'.", op);
             res.place = NULL;
             return res;
         }
@@ -121,7 +121,8 @@ void handleIncDec(symbolTable *scope, const char *id, const char *op)
     emit(op, NULL, NULL, var->variable.id);
     if (!editValue(scope, id, &one))
     {
-        fprintf(stderr, "Error: Failed to %s variable '%s'.\n",
-                strcmp(op, "INC") == 0 ? "increment" : "decrement", id);
+        // fprintf(stderr, "Error: Failed to %s variable '%s'.\n",
+        //         strcmp(op, "INC") == 0 ? "increment" : "decrement", id);
+        ERRORF("Failed to %s variable '%s'.", strcmp(op, "INC") == 0 ? "increment" : "decrement", id);
     }
 }
