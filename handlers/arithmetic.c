@@ -42,18 +42,21 @@ exprResult arithmeticOperations(valNode *left, valNode *right, const char *op)
     int rInt = rightIsFloat ? (int)right->value.fValue : right->type == typeChar ? (int)right->value.cValue
                                                                                  : right->value.iValue;
 
-    if (strcmp(op, "/") == 0)
+    bool eitherFloat = leftIsFloat || rightIsFloat;
+    if (strcmp(op, "/") == 0 || strcmp(op, "%") == 0)
     {
-        if ((leftIsFloat || rightIsFloat) ? (rFloat == 0.0f) : (rInt == 0))
+        if ((eitherFloat) ? (rFloat == 0.0f) : (rInt == 0))
         {
             res.error = true;
-            ERRORF("Division by zero error in '%s' operation.", op);
+            ERRORF("divide or mod by zero error in '%s' operation.", op);
+            if (strcmp(op, "%") == 0 && eitherFloat)
+            {
+                ERRORF("Modulus operator '%%' not supported for float operands.");
+            }
             res.place = NULL;
             return res;
         }
     }
-
-    bool eitherFloat = leftIsFloat || rightIsFloat;
 
     if (eitherFloat)
     {
@@ -68,10 +71,20 @@ exprResult arithmeticOperations(valNode *left, valNode *right, const char *op)
             resultNode.value.fValue = lFloat / rFloat;
         else
         {
-            res.error = true;
-            ERRORF("Unknown operator '%s'.", op);
-            res.place = NULL;
-            return res;
+            if (strcmp(op, "%") == 0)
+            {
+                res.error = true;
+                ERRORF("Modulus operator '%%' not supported for float operands.");
+                res.place = NULL;
+                return res;
+            }
+            else
+            {
+                res.error = true;
+                ERRORF("Unknown operator '%s'.", op);
+                res.place = NULL;
+                return res;
+            }
         }
     }
     else
@@ -85,6 +98,8 @@ exprResult arithmeticOperations(valNode *left, valNode *right, const char *op)
             resultNode.value.iValue = lInt * rInt;
         else if (strcmp(op, "/") == 0)
             resultNode.value.iValue = lInt / rInt;
+        else if (strcmp(op, "%") == 0)
+            resultNode.value.iValue = lInt % rInt;
         else
         {
             res.error = true;

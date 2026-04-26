@@ -52,6 +52,7 @@ letter  [a-zA-Z]
 "-=" { return MINUS_ASSIGN; }
 "*=" { return MUL_ASSIGN; }
 "/=" { return DIV_ASSIGN; }
+"%=" { return MOD_ASSIGN; }
 
 
 

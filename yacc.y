@@ -82,7 +82,7 @@ Stack switchStack;
 %token PRINT
 %token OR AND NOT
 %token GE LE EQ NE
-%token INC DEC PLUS_ASSIGN MINUS_ASSIGN MUL_ASSIGN DIV_ASSIGN
+%token INC DEC PLUS_ASSIGN MINUS_ASSIGN MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN
 %token CONST
 %token VOID
 
@@ -672,6 +672,14 @@ expr:
             $$.val = res.value;
         }
     }
+    | expr '%' expr {
+        exprResult res = arithmeticOperations(&$1.val, &$3.val, "%");
+        if(!res.error) {
+            emit("MOD", $1.place, $3.place, res.place);
+            $$.place = res.place;
+            $$.val = res.value;
+        }
+    }
     | expr '>' expr {
         exprResult res = comparisonOperations(&$1.val, &$3.val, ">");
         if(!res.error) {
@@ -841,11 +849,11 @@ unbraced_stmt:
             if (!var->variable.isInitialized) {
                 WARNF("Variable '%s' is used before initialization.", $1);
             }
-            var->variable.isUsed = true;
             valNode varVal = varToValNode(var);
             exprResult res = arithmeticOperations(&varVal, &$3.val, "+");
             if(!res.error) {
                 emit("ADD", var->variable.id, $3.place, var->variable.id);
+                var->variable.isUsed = true;
             }
         }
         $$ = 0;
@@ -859,11 +867,11 @@ unbraced_stmt:
             if (!var->variable.isInitialized) {
                 WARNF("Variable '%s' is used before initialization.", $1);
             }
-            var->variable.isUsed = true;
             valNode varVal = varToValNode(var);
             exprResult res = arithmeticOperations(&varVal, &$3.val, "-");
             if(!res.error) {
                 emit("SUB", var->variable.id, $3.place, var->variable.id);
+                var->variable.isUsed = true;
             }
         }
         $$ = 0;
@@ -877,11 +885,11 @@ unbraced_stmt:
             if (!var->variable.isInitialized) {
                 WARNF("Variable '%s' is used before initialization.", $1);
             }
-            var->variable.isUsed = true;
             valNode varVal = varToValNode(var);
             exprResult res = arithmeticOperations(&varVal, &$3.val, "*");
             if(!res.error) {
                 emit("MUL", var->variable.id, $3.place, var->variable.id);
+                var->variable.isUsed = true;
             }
         }
         $$ = 0;
@@ -895,11 +903,30 @@ unbraced_stmt:
             if (!var->variable.isInitialized) {
                 WARNF("Variable '%s' is used before initialization.", $1);
             }
-            var->variable.isUsed = true;
             valNode varVal = varToValNode(var);
             exprResult res = arithmeticOperations(&varVal, &$3.val, "/");
             if(!res.error) {
                 emit("DIV", var->variable.id, $3.place, var->variable.id);
+                var->variable.isUsed = true;
+
+            }
+        }
+        $$ = 0;
+    }
+    | IDENTIFIER MOD_ASSIGN expr ';' {
+        varNode *var = findVariable(currentScope, $1);
+        if(!var) {
+            ERRORF("Variable '%s' you can't assign value to variable not declared before", $1);
+            // exit(1);
+        } else {
+            if (!var->variable.isInitialized) {
+                WARNF("Variable '%s' is used before initialization.", $1);
+            }
+            valNode varVal = varToValNode(var);
+            exprResult res = arithmeticOperations(&varVal, &$3.val, "%");
+            if(!res.error) {
+                emit("MOD", var->variable.id, $3.place, var->variable.id);
+                var->variable.isUsed = true;
             }
         }
         $$ = 0;
