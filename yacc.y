@@ -51,6 +51,11 @@ Stack switchStack;
     int bValue;
 
     struct {
+        bool hasReturn;
+        bool isEmpty;
+    } blockInfo;
+
+    struct {
         valNode val;
         char *place;
     } exprNode;
@@ -76,7 +81,8 @@ Stack switchStack;
 %type <exprNode> FUNCTION_CALL
 %type <argList> ARG_LIST
 %type <exprNode> for_cond_opt
-%type <bValue> BLOCK_STMT_LIST BLOCK branch_stmt single_if if_else stmt unscoped_stmt unbraced_stmt DECLARATION
+%type <blockInfo> BLOCK_STMT_LIST
+%type <bValue> BLOCK branch_stmt single_if if_else stmt unscoped_stmt unbraced_stmt DECLARATION CASE_LIST CASE_ITEM DEFAULT_ITEM
 %token INT FLOAT BOOL CHAR STRING
 %token IF ELSE FOR WHILE SWITCH CASE DO BREAK CONTINUE RETURN DEFAULT
 %token PRINT
@@ -199,16 +205,16 @@ TYPE:
     ;
 
 BLOCK_STMT_LIST:
-            /* empty */ { $$ = 0; }
-        | stmt BLOCK_STMT_LIST { $$ = $1 || $2; }
+            /* empty */ { $$.hasReturn = false; $$.isEmpty = true;  }
+        | stmt BLOCK_STMT_LIST { $$.hasReturn = $1 || $2.hasReturn; $$.isEmpty = false; }
     ;
 
 BLOCK:
-        '{' BLOCK_STMT_LIST '}' { $$ = $2; }
+        '{' BLOCK_STMT_LIST '}' { $$ = $2.hasReturn; }
     ;
 
 branch_stmt:
-            '{' { enterScope(); } BLOCK_STMT_LIST '}' { exitScope(); $$ = $3; }
+            '{' { enterScope(); } BLOCK_STMT_LIST '}' { exitScope(); $$ = $3.hasReturn; }
         | single_if { $$ = $1; }
         | if_else { $$ = $1; }
         | { enterScope(); } unbraced_stmt { exitScope(); $$ = $2; }
@@ -785,13 +791,13 @@ if_else: if_prefix branch_stmt ELSE {
     
 stmt:
             unbraced_stmt { $$ = $1; }
-        | '{' { enterScope(); } BLOCK_STMT_LIST '}' { exitScope(); $$ = $3; }
+        | '{' { enterScope(); } BLOCK_STMT_LIST '}' { exitScope(); $$ = $3.hasReturn; }
         | single_if { $$ = $1; }
         | if_else { $$ = $1; }
     ;
 
 unscoped_stmt:
-            '{' BLOCK_STMT_LIST '}' { $$ = $2; }
+            '{' BLOCK_STMT_LIST '}' { $$ = $2.hasReturn; }
         | single_if { $$ = $1; }
         | if_else { $$ = $1; }
         | unbraced_stmt { $$ = $1; }
@@ -976,8 +982,9 @@ unbraced_stmt:
         
         SwitchStorage *sw = (SwitchStorage *)stackPop(&switchStack);
         free(sw->switchExpr);
+        free(sw->matchedVar);
         free(sw);
-        $$ = 0;
+        $$ = $3;
     }
     | error ';' {
         ERRORF("Invalid statement.");
@@ -987,9 +994,10 @@ unbraced_stmt:
     ;
 
 CASE_LIST:
-      CASE_ITEM CASE_LIST
-    | DEFAULT_ITEM
-    | /* empty */
+      CASE_ITEM CASE_LIST { 
+        $$ = $1 && $2; }
+    | DEFAULT_ITEM { $$ = $1; }
+    | /* empty */ { $$ = 0; }
     ;
 
 CASE_ITEM:
@@ -1016,11 +1024,18 @@ CASE_ITEM:
         $<sValue>$ = l_next_case;
     } BLOCK_STMT_LIST {
         emit("LABEL", NULL, NULL, $<sValue>4);
+        if($5.isEmpty) {
+            $$ = true;
+        } else {
+            $$ = $5.hasReturn;
+        }
     }
     ;
 
 DEFAULT_ITEM:
-    DEFAULT ':' BLOCK_STMT_LIST
+    DEFAULT ':' BLOCK_STMT_LIST {
+        $$ = $3.hasReturn;
+    }
     ;
     
 
