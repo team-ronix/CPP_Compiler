@@ -81,6 +81,7 @@ varNode *addVariable(symbolTable *table, const char *id, const char *originalId,
     newVar->paramNext = NULL;
     newVar->variable.isConst = false;
     newVar->variable.isInitialized = false;
+    newVar->variable.hasDefaultValue = false;
     newVar->variable.isUsed = false;
     newVar->variable.lineNumber = lineNumber;
 

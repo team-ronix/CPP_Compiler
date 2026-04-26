@@ -60,6 +60,7 @@ typedef struct
     } value;
     bool isConst;
     bool isInitialized;
+    bool hasDefaultValue;
     bool isUsed;
 } var;
 
@@ -146,6 +147,9 @@ typedef struct
 {
     char *switchExpr;
     char *matchedVar;
+    char **caseValues;
+    int   caseCount;
+    int   caseCapacity;
 } SwitchStorage;
 
 functionNode *findFunction(symbolTable *table, const char *id);

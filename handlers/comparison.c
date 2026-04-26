@@ -11,14 +11,14 @@ exprResult comparisonOperations(valNode *left, valNode *right, const char *op)
     exprResult res;
     res.error = false;
 
-    if (left->type != typeInt && left->type != typeFloat && left->type != typeChar)
+    if (left->type != typeInt && left->type != typeFloat && left->type != typeChar && left->type != typeBool)
     {
         res.error = true;
         ERRORF("Unsupported type %d for left operand in '%s'.", left->type, op);
         res.place = NULL;
         return res;
     }
-    if (right->type != typeInt && right->type != typeFloat && right->type != typeChar)
+    if (right->type != typeInt && right->type != typeFloat && right->type != typeChar && right->type != typeBool)
     {
         res.error = true;
         ERRORF("Unsupported type %d for right operand in '%s'.", right->type, op);

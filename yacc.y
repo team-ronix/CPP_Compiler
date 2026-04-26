@@ -15,6 +15,8 @@ char *createLabel(void);
 void enterScope(void);
 void exitScope(void);
 void emit(const char *op, const char *arg1, const char *arg2, const char *result);
+const char *originalIdFromGenerated(symbolTable *scope, const char *generatedId);
+char *switchCaseValueKey(valNode value);
 extern int lineNumber;
 symbolTable *globalTable = NULL;
 valType currentType = noType;
@@ -58,6 +60,7 @@ Stack switchStack;
     struct {
         valNode val;
         char *place;
+        bool isConstExpr;
     } exprNode;
 
     struct {
@@ -234,6 +237,7 @@ PARAMETER:
                 char *paramName = generateVarName($2, currentScope->id);
                 if ($3.hasValue) {
                     param = addVariableWithValue(currentScope, paramName, $2, currentType, false, $3.val);
+                    param->variable.hasDefaultValue = true;
                     free(paramName);
                 } else {
                     param = addVariable(currentScope, paramName, $2, currentType);
@@ -285,10 +289,10 @@ FUNCTION:
             varNode *param = currentFunction->parameters;
             bool hasDefault = false;
             while (param != NULL) {
-                if (hasDefault && !param->variable.isInitialized) {
+                if (hasDefault && !param->variable.hasDefaultValue) {
                     ERRORF("Non-default parameter '%s' cannot follow default parameters.", param->variable.originalId);
                 }
-                if (param->variable.isInitialized) {
+                if (param->variable.hasDefaultValue) {
                     hasDefault = true;
                 }
                 param->variable.isInitialized = true;
@@ -342,6 +346,7 @@ FUNCTION_CALL:
         $$.place = strdup("INVALID_CALL");
         $$.val.type = noType;
         $$.val.value.iValue = 0;
+        $$.isConstExpr = false;
 
         functionNode *funcNode = findFunction(currentScope, $1);
         
@@ -363,7 +368,7 @@ FUNCTION_CALL:
                     }
                     args = args->next;
                 } else {
-                    if (params->variable.isInitialized) {
+                    if (params->variable.hasDefaultValue) {
                         // Emit default value - convert to string representation
                         char defaultVal[50];
                         switch (params->variable.type) {
@@ -387,7 +392,7 @@ FUNCTION_CALL:
                         }
                         emit("ARG", strdup(defaultVal), NULL, NULL);
                     } else {
-                        ERRORF("Too few arguments in function '%s' call. Missing argument of type %d.", $1, params->variable.type);
+                        ERRORF("Too few arguments in function '%s' call.", $1);
                         callHasErrors = true;
                         break;
                     }
@@ -451,6 +456,7 @@ for_cond_opt:
         node.value.bValue = true;
         $$.place = strdup("true");
         $$.val = node;
+                $$.isConstExpr = true;
       }
     | expr {
         $$ = $1;
@@ -539,7 +545,10 @@ expr:
         varNode *var = findVariable(currentScope, $1);
         if (var == NULL) {
             ERRORF("Variable '%s' not declared.", $1);
-            // // exit(1);
+            $$.place = strdup("INVALID_ID");
+            $$.val.type = noType;
+            $$.val.value.iValue = 0;
+            $$.isConstExpr = false;
         } else {
             if (!var->variable.isInitialized) {
                 WARNF("Variable '%s' is used before initialization.", $1);
@@ -548,6 +557,7 @@ expr:
             char* varName = generateVarName($1, var->scope->id);
             $$.place = strdup(varName);
             $$.val = varToValNode(var);
+            $$.isConstExpr = var->variable.isConst && var->variable.isInitialized;
             free(varName);
         }
     }
@@ -559,6 +569,7 @@ expr:
         sprintf(buffer, "%d", $1);
         $$.place = strdup(buffer);
         $$.val = node;
+        $$.isConstExpr = true;
     }
     | FLOATING   {
         valNode node;
@@ -568,6 +579,7 @@ expr:
         sprintf(buffer, "%f", $1);
         $$.place = strdup(buffer);
         $$.val = node;
+        $$.isConstExpr = true;
     }
     | BOOLEAN    {
         valNode node;
@@ -577,6 +589,7 @@ expr:
         sprintf(buffer, "%s", $1 ? "true" : "false");
         $$.place = strdup(buffer);
         $$.val = node;
+        $$.isConstExpr = true;
     }
     | CHARACTER  {
         valNode node;
@@ -586,6 +599,7 @@ expr:
         sprintf(buffer, "'%c'", $1);
         $$.place = strdup(buffer);
         $$.val = node;
+        $$.isConstExpr = true;
     }
     | STRING_LITERAL {
         valNode node;
@@ -608,6 +622,7 @@ expr:
         sprintf(buffer, "\"%s\"", str);
         $$.place = strdup(buffer);
         $$.val = node;
+        $$.isConstExpr = true;
     }
     | '-' expr %prec UMINUS {
         // if ($2.val.type != typeInt && $2.val.type != typeFloat && $2.val.type != typeChar) {
@@ -634,6 +649,7 @@ expr:
             emit("NEG", $2.place, strdup("NULL"),  res.place);
             $$.place = res.place;
             $$.val = res.value;
+            $$.isConstExpr = $2.isConstExpr;
         }
     }
     | expr '+' expr {
@@ -642,6 +658,7 @@ expr:
             emit("ADD", $1.place, $3.place, res.place);
             $$.place = res.place;
             $$.val = res.value;
+            $$.isConstExpr = $1.isConstExpr && $3.isConstExpr;
         }
     }
     | expr '-' expr
@@ -651,6 +668,7 @@ expr:
             emit("SUB", $1.place, $3.place, res.place);
             $$.place = res.place;
             $$.val = res.value;
+            $$.isConstExpr = $1.isConstExpr && $3.isConstExpr;
         }
     }
     | expr '*' expr {
@@ -659,6 +677,7 @@ expr:
             emit("MUL", $1.place, $3.place, res.place);
             $$.place = res.place;
             $$.val = res.value;
+            $$.isConstExpr = $1.isConstExpr && $3.isConstExpr;
         }
     }
     | expr '/' expr {
@@ -667,6 +686,7 @@ expr:
             emit("DIV", $1.place, $3.place, res.place);
             $$.place = res.place;
             $$.val = res.value;
+            $$.isConstExpr = $1.isConstExpr && $3.isConstExpr;
         }
     }
     | expr '<' expr {
@@ -675,6 +695,7 @@ expr:
             emit("LT", $1.place, $3.place, res.place);
             $$.place = res.place;
             $$.val = res.value;
+            $$.isConstExpr = $1.isConstExpr && $3.isConstExpr;
         }
     }
     | expr '%' expr {
@@ -683,6 +704,7 @@ expr:
             emit("MOD", $1.place, $3.place, res.place);
             $$.place = res.place;
             $$.val = res.value;
+            $$.isConstExpr = $1.isConstExpr && $3.isConstExpr;
         }
     }
     | expr '>' expr {
@@ -691,6 +713,7 @@ expr:
             emit("GT", $1.place, $3.place, res.place);
             $$.place = res.place;
             $$.val = res.value;
+            $$.isConstExpr = $1.isConstExpr && $3.isConstExpr;
         }
     }
     | expr GE expr {
@@ -699,6 +722,7 @@ expr:
             emit("GE", $1.place, $3.place, res.place);
             $$.place = res.place;
             $$.val = res.value;
+            $$.isConstExpr = $1.isConstExpr && $3.isConstExpr;
         }
     }
     | expr LE expr {
@@ -707,6 +731,7 @@ expr:
             emit("LE", $1.place, $3.place, res.place);
             $$.place = res.place;
             $$.val = res.value;
+            $$.isConstExpr = $1.isConstExpr && $3.isConstExpr;
         }
     }
     | expr NE expr {
@@ -715,6 +740,7 @@ expr:
             emit("NE", $1.place, $3.place, res.place);
             $$.place = res.place;
             $$.val = res.value;
+            $$.isConstExpr = $1.isConstExpr && $3.isConstExpr;
         }
     }
     | expr EQ expr {
@@ -723,11 +749,13 @@ expr:
             emit("EQ", $1.place, $3.place, res.place);
             $$.place = res.place;
             $$.val = res.value;
+            $$.isConstExpr = $1.isConstExpr && $3.isConstExpr;
         }
     }
     | '(' expr ')' {
         $$.place = $2.place;
         $$.val = $2.val;
+        $$.isConstExpr = $2.isConstExpr;
     }
     | NOT expr {
         exprResult res = logicalNotOperation(&$2.val);
@@ -735,6 +763,7 @@ expr:
             emit("NOT", $2.place, NULL, res.place);
             $$.place = res.place;
             $$.val = res.value;
+            $$.isConstExpr = $2.isConstExpr;
         }
     }
     | expr AND expr {
@@ -743,6 +772,7 @@ expr:
             emit("AND", $1.place, $3.place, res.place);
             $$.place = res.place;
             $$.val = res.value;
+            $$.isConstExpr = $1.isConstExpr && $3.isConstExpr;
         }
     }
     | expr OR expr {
@@ -751,6 +781,7 @@ expr:
             emit("OR", $1.place, $3.place, res.place);
             $$.place = res.place;
             $$.val = res.value;
+            $$.isConstExpr = $1.isConstExpr && $3.isConstExpr;
         }
     }
     ;
@@ -805,14 +836,21 @@ unscoped_stmt:
 
 switch_prefix:
     SWITCH '(' expr ')' {
+        if (!canConvert($3.val.type, typeInt)) {
+            ERRORF("Switch expression must be of type int.");
+        }
+
         enterScope();
         currentScope->starLabel = NULL;
         currentScope->endLabel = createLabel();
         currentScope->isLoopScope = true;
 
         SwitchStorage *sw = malloc(sizeof(SwitchStorage));
-        sw->switchExpr = strdup($3.place);
-        sw->matchedVar = tempResult();
+        sw->switchExpr    = strdup($3.place);
+        sw->matchedVar    = tempResult();
+        sw->caseValues    = NULL;
+        sw->caseCount     = 0;
+        sw->caseCapacity  = 0;
         
         emit("ASSIGN", "false", NULL, sw->matchedVar);
         
@@ -983,6 +1021,8 @@ unbraced_stmt:
         SwitchStorage *sw = (SwitchStorage *)stackPop(&switchStack);
         free(sw->switchExpr);
         free(sw->matchedVar);
+        for (int i = 0; i < sw->caseCount; i++) free(sw->caseValues[i]);
+        free(sw->caseValues);
         free(sw);
         $$ = $3;
     }
@@ -1003,6 +1043,32 @@ CASE_LIST:
 CASE_ITEM:
     CASE expr ':' {
         SwitchStorage *sw = (SwitchStorage *)stackPeek(&switchStack);
+
+        if (!$2.isConstExpr) {
+            ERRORF("The value is not usable in a constant expression.");
+        }
+
+        if (!canConvert($2.val.type, typeInt)) {
+            ERRORF("Case label must be an integer constant expression.");
+        }
+
+        if ($2.isConstExpr && canConvert($2.val.type, typeInt)) {
+            valNode caseAsInt = convertValue($2.val, typeInt);
+            char *caseKey = switchCaseValueKey(caseAsInt);
+
+            // Check for duplicate case value
+            for (int i = 0; i < sw->caseCount; i++) {
+                if (strcmp(sw->caseValues[i], caseKey) == 0) {
+                    ERRORF("Duplicate case value '%s' in switch statement.", caseKey);
+                    break;
+                }
+            }
+
+            // Record this case value
+            sw->caseValues = realloc(sw->caseValues, (sw->caseCount + 1) * sizeof(char *));
+            sw->caseValues[sw->caseCount++] = caseKey;
+        }
+
         char *l_cond_test = createLabel();
         char *l_body      = createLabel();
         char *l_next_case = createLabel();
@@ -1051,6 +1117,32 @@ char* tempResult(void) {
 char* createLabel(void) {
     char buffer[20];
     sprintf(buffer, "L_%d", labelsCounter++);
+    return strdup(buffer);
+}
+
+const char *originalIdFromGenerated(symbolTable *scope, const char *generatedId) {
+    if (generatedId == NULL) {
+        return "<unknown>";
+    }
+
+    for (symbolTable *table = scope; table != NULL; table = table->parent) {
+        for (varNode *current = table->variables; current != NULL; current = current->next) {
+            if (current->variable.id != NULL && strcmp(current->variable.id, generatedId) == 0) {
+                return current->variable.originalId != NULL ? current->variable.originalId : current->variable.id;
+            }
+        }
+    }
+
+    return generatedId;
+}
+
+char *switchCaseValueKey(valNode value) {
+    char buffer[64];
+    if (value.type == typeInt) {
+        snprintf(buffer, sizeof(buffer), "%d", value.value.iValue);
+    } else {
+        snprintf(buffer, sizeof(buffer), "INVALID");
+    }
     return strdup(buffer);
 }
 
