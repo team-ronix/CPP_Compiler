@@ -1,0 +1,55 @@
+int badParamOrder(int a = 1, int b)
+{
+    return a;
+}
+
+void badVoidReturn()
+{
+    return 1;
+}
+
+int badReturnType()
+{
+    return "oops";
+}
+
+int goodFunc(int x)
+{
+    return x;
+}
+
+int main()
+{
+    int a = 1;
+    int a = 2;
+
+    const int c;
+
+    int badType = "text";
+
+    int fromUndefined = missingVar;
+    missingVar = 9;
+
+    int callTooMany = goodFunc(1, 2);
+    int callWrongType = goodFunc("z");
+    int callUndefined = undefinedFunc(3);
+
+    int divZero = 10 / 0;
+    float modFloat = 3.5 % 2.0;
+
+    bool cmpError = "abc" < 3;
+    bool logicError = "abc" && 1;
+    bool notError = !"abc";
+
+    break;
+    continue;
+
+    {
+        int inner = 0;
+    }
+    inner = 1;
+
+    a = c;
+
+    return 0;
+}

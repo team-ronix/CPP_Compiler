@@ -509,3 +509,24 @@ varNode *findParameter(function *func, const char *id)
     }
     return NULL;
 }
+
+char *typeToString(valType type)
+{
+    switch (type)
+    {
+    case typeInt:
+        return "int";
+    case typeFloat:
+        return "float";
+    case typeBool:
+        return "bool";
+    case typeChar:
+        return "char";
+    case typeString:
+        return "string";
+    case typeVoid:
+        return "void";
+    default:
+        return "unknown";
+    }
+}

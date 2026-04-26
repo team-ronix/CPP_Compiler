@@ -125,7 +125,7 @@ DECLARATION:
                     if(canConvert(val.type, currentType)) {
                         val = convertValue(val, currentType);
                     } else {
-                        ERRORF("Type mismatch for variable '%s'. Expected type %d but got type %d.", $2, currentType, val.type);
+                        ERRORF("Type mismatch for variable '%s'. Expected type %s.", $2, typeToString(currentType));
                         hasError = true;
                     }
                 }
@@ -163,7 +163,7 @@ DECLARATION:
             hasError = true;
         }
         if(val.type != currentType && hasError == false) {
-            ERRORF("Type mismatch for variable '%s'. Expected type %d but got type %d.", $3, currentType, val.type);
+            ERRORF("Type mismatch for variable '%s'. Expected type %s.", $3, typeToString(currentType));
             hasError = true;
         }
         if (!hasError) {
@@ -225,12 +225,11 @@ PARAMETER:
         if(currentFunction != NULL) {
             varNode *param = findParameter(currentFunction, $2);
             if (param == NULL) {
+                char *paramName = generateVarName($2, currentScope->id);
                 if ($3.hasValue) {
-                    char *paramName = generateVarName($2, currentScope->id);
                     param = addVariableWithValue(currentScope, paramName, $2, currentType, false, $3.val);
                     free(paramName);
                 } else {
-                    char *paramName = generateVarName($2, currentScope->id);
                     param = addVariable(currentScope, paramName, $2, currentType);
                     free(paramName);
                 }
@@ -240,7 +239,6 @@ PARAMETER:
                     if (!addParameterToFunction(currentFunction, param)) {
                         ERRORF("Failed to add parameter '%s' to function.", $2);
                     } else {
-                        param->variable.isInitialized = true;
                         emit("PARAM", $3.hasValue ? $3.place : NULL, NULL, param->variable.id);
                     }
                 }
@@ -282,11 +280,12 @@ FUNCTION:
             bool hasDefault = false;
             while (param != NULL) {
                 if (hasDefault && !param->variable.isInitialized) {
-                    ERRORF("Non-default parameter '%s' cannot follow default parameters.", param->variable.id);
+                    ERRORF("Non-default parameter '%s' cannot follow default parameters.", param->variable.originalId);
                 }
                 if (param->variable.isInitialized) {
                     hasDefault = true;
                 }
+                param->variable.isInitialized = true;
                 param = param->paramNext;
             }
         }
@@ -350,7 +349,7 @@ FUNCTION_CALL:
             while (params != NULL) {
                 if (args != NULL) {
                     if (!canConvert(args->val.type, params->variable.type)) {
-                        ERRORF("Argument type mismatch in function '%s' call. Expected type %d but got type %d.", $1, params->variable.type, args->val.type);
+                        ERRORF("Argument type mismatch in function '%s' call. Expected type %s", $1, typeToString(params->variable.type));
                         callHasErrors = true;
                         break;
                     } else {
@@ -501,7 +500,7 @@ CHAINED_DECLARATION:
                     if(canConvert(val.type, currentType)) {
                         val = convertValue(val, currentType);
                     } else {
-                        ERRORF("Type mismatch for variable '%s'. Expected type %d but got type %d.", $2, currentType, val.type);
+                        ERRORF("Type mismatch for variable '%s'. Expected type %s.", $2, typeToString(currentType));
                         // exit(1);
                     }
                 }
@@ -895,11 +894,12 @@ unbraced_stmt:
             if (currentFunction->returnType == typeVoid) {
                 ERRORF("'return' statement with a value in a void function.");
                 // exit(1);
-            }
-            if (canConvert($2.val.type, funcType)) {
-                emit("RETURN", $2.place, NULL, NULL);
             } else {
-                ERRORF("Return type mismatch. Expected type %d but got type %d.", funcType, $2.val.type);
+                if (canConvert($2.val.type, funcType)) {
+                    emit("RETURN", $2.place, NULL, NULL);
+                } else {
+                    ERRORF("Return type mismatch. Expected type %s.", typeToString(funcType));
+                }
             }
         }
         $$ = 1;

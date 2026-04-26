@@ -48,7 +48,7 @@ typedef struct
 {
     valType type;
     char *id;
-    char * originalId;
+    char *originalId;
     int lineNumber;
     union
     {
@@ -153,4 +153,5 @@ functionNode *addFunction(symbolTable *table, const char *id, valType returnType
 bool addParameterToFunction(function *func, varNode *param);
 void checkForUnusedVariables(symbolTable *table);
 varNode *findParameter(function *func, const char *id);
+char *typeToString(valType type);
 #endif
