@@ -3,13 +3,17 @@
 
 extern char *tempResult(void);
 
-static int isNumericLike(valType type)
+static int isLogicalOperand(valType type)
 {
-    return type == typeInt || type == typeFloat || type == typeChar;
+    return type == typeInt || type == typeFloat || type == typeChar || type == typeBool;
 }
 
 static int toBoolValue(const valNode *node)
 {
+    if (node->type == typeBool)
+    {
+        return node->value.bValue;
+    }
     if (node->type == typeInt)
     {
         return node->value.iValue != 0;
@@ -26,10 +30,10 @@ exprResult logicalNotOperation(valNode *operand)
     exprResult res;
     res.error = false;
 
-    if (!isNumericLike(operand->type))
+    if (!isLogicalOperand(operand->type))
     {
         res.error = true;
-        ERRORF("Unary 'NOT' operator requires numeric operand.");
+        ERRORF("Unary 'NOT' operator requires bool/numeric operand.");
         res.place = NULL;
         return res;
     }
@@ -45,18 +49,18 @@ exprResult logicalBinaryOperation(valNode *left, valNode *right, const char *op)
     exprResult res;
     res.error = false;
 
-    if (!isNumericLike(left->type))
+    if (!isLogicalOperand(left->type))
     {
         res.error = true;
-        ERRORF("Left operand of '%s' must be numeric.", op);
+        ERRORF("Left operand of '%s' must be bool/numeric.", op);
         res.place = NULL;
         return res;
     }
 
-    if (!isNumericLike(right->type))
+    if (!isLogicalOperand(right->type))
     {
         res.error = true;
-        ERRORF("Right operand of '%s' must be numeric.", op);
+        ERRORF("Right operand of '%s' must be bool/numeric.", op);
         res.place = NULL;
         return res;
     }
