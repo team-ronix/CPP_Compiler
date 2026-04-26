@@ -114,6 +114,43 @@ exprResult arithmeticOperations(valNode *left, valNode *right, const char *op)
     return res;
 }
 
+void handleCompoundAssign(symbolTable *scope, const char *id, const char *rightPlace, const valNode *right, const char *op, const char *quadOp)
+{
+    varNode *var = findVariable(scope, id);
+    if (!var)
+    {
+        ERRORF("Variable '%s' you can't assign value to variable not declared before", id);
+        return;
+    }
+
+    if (!var->variable.isInitialized)
+    {
+        WARNF("Variable '%s' is used before initialization.", id);
+    }
+
+    valNode leftValue = varToValNode(var);
+    valNode rightValue = *right;
+    exprResult res = arithmeticOperations(&leftValue, &rightValue, op);
+    if (res.error)
+    {
+        if (res.place != NULL)
+        {
+            free(res.place);
+        }
+        return;
+    }
+
+    if (!editValue(scope, id, &res.value))
+    {
+        free(res.place);
+        return;
+    }
+
+    emit(quadOp, var->variable.id, rightPlace, var->variable.id);
+    var->variable.isUsed = true;
+    free(res.place);
+}
+
 void handleIncDec(symbolTable *scope, const char *id, const char *op)
 {
     varNode *var = findVariable(scope, id);

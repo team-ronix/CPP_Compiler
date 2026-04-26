@@ -41,29 +41,29 @@ varNode *findVariable(symbolTable *table, const char *id)
 
 void assignValue(varNode *varNode, valNode value, valType type)
 {
-    switch (type)
-    {
-    case typeInt:
-        varNode->variable.value.iValue = value.value.iValue;
-        break;
-    case typeFloat:
-        varNode->variable.value.fValue = value.value.fValue;
-        break;
-    case typeBool:
-        varNode->variable.value.bValue = value.value.bValue;
-        break;
-    case typeChar:
-        varNode->variable.value.cValue = value.value.cValue;
-        break;
-    case typeString:
-        if (value.value.sValue != NULL)
-            varNode->variable.value.sValue = strdup(value.value.sValue);
-        else
-            varNode->variable.value.sValue = NULL;
-        break;
-    default:
-        break;
-    }
+    // switch (type)
+    // {
+    // case typeInt:
+    //     varNode->variable.value.iValue = value.value.iValue;
+    //     break;
+    // case typeFloat:
+    //     varNode->variable.value.fValue = value.value.fValue;
+    //     break;
+    // case typeBool:
+    //     varNode->variable.value.bValue = value.value.bValue;
+    //     break;
+    // case typeChar:
+    //     varNode->variable.value.cValue = value.value.cValue;
+    //     break;
+    // case typeString:
+    //     if (value.value.sValue != NULL)
+    //         varNode->variable.value.sValue = strdup(value.value.sValue);
+    //     else
+    //         varNode->variable.value.sValue = NULL;
+    //     break;
+    // default:
+    //     break;
+    // }
 }
 
 varNode *addVariable(symbolTable *table, const char *id, const char *originalId, valType type)
@@ -180,6 +180,7 @@ bool editValue(symbolTable *table, const char *id, const valNode *newValue)
     }
     if (varNode->variable.isConst)
     {
+        ERRORF("Cannot assign a new value to constant variable.");
         return false;
     }
     if (varNode->variable.type != newValue->type)
