@@ -836,7 +836,7 @@ unscoped_stmt:
 
 switch_prefix:
     SWITCH '(' expr ')' {
-        if (!canConvert($3.val.type, typeInt)) {
+        if (!canConvert($3.val.type, typeInt) || $3.val.type == typeFloat) {
             ERRORF("Switch expression must be of type int.");
         }
 
@@ -917,7 +917,7 @@ unbraced_stmt:
         if (loopScope == NULL) {
             ERRORF("'break' statement not within a loop.");
         } else {
-            emit("JMP_BREAK", NULL, NULL, loopScope->endLabel);
+            emit("JMP", NULL, NULL, loopScope->endLabel);
         }
         $$ = 0;
     }
@@ -926,7 +926,7 @@ unbraced_stmt:
         if (loopScope == NULL) {
             ERRORF("'continue' statement not within a loop.");
         } else {
-            emit("JMP_CONTINUE", NULL, NULL, loopScope->starLabel);
+            emit("JMP", NULL, NULL, loopScope->starLabel);
         }
         $$ = 0;
     }

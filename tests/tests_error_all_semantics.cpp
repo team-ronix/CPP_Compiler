@@ -192,5 +192,45 @@ int main() {
     // ERRORF: "Variable '%s' not declared."
     neverDeclaredInc++;
 
+    int z = 2;
+    int x = 1;
+
+    switch (x) {
+    case z:
+        x = 10;
+        break;
+    default:
+        x = 0;
+        break;
+    }
+
+    switch (x) {
+    case 1:
+        x = 10;
+        break;
+    case 2:
+        x = 20;
+        break;
+    case 1:
+        x = 30;
+        break;
+    default:
+        x = 0;
+        break;
+    }
+
+    float quantity = 2.5;
+
+    switch (quantity) {
+    case 1:
+        quantity = quantity + 1.0;
+        break;
+    default:
+        quantity = 0.0;
+        break;
+    }
+
+
+
     return 0;
 }
