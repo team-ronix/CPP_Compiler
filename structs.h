@@ -1,6 +1,7 @@
 #ifndef STRUCTS_H
 #define STRUCTS_H
 
+#include <stdio.h>
 #include <stdbool.h>
 
 typedef enum
@@ -130,7 +131,7 @@ bool removeVariable(symbolTable *table, const char *id);
 void assignValue(varNode *varNode, valNode value, valType type);
 bool editValue(symbolTable *table, const char *id, const valNode *newValue);
 bool isInCurrentScope(symbolTable *table, const char *id);
-void printSymbolTable(symbolTable *table, int level);
+void printSymbolTable(symbolTable *table, int level, FILE *out);
 symbolTable *findNearestLoopScope(symbolTable *table);
 valNode varToValNode(varNode *variable);
 char *valTypeToString(valType type);
@@ -148,8 +149,8 @@ typedef struct
     char *switchExpr;
     char *matchedVar;
     char **caseValues;
-    int   caseCount;
-    int   caseCapacity;
+    int caseCount;
+    int caseCapacity;
 } SwitchStorage;
 
 functionNode *findFunction(symbolTable *table, const char *id);

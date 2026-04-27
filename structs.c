@@ -240,29 +240,33 @@ bool editValue(symbolTable *table, const char *id, const valNode *newValue)
     return true;
 }
 
-void printSymbolTable(symbolTable *table, int level)
+void printSymbolTable(symbolTable *table, int level, FILE *out)
 {
     if (table == NULL)
     {
         return;
     }
-    printf("Symbol Table, level:%d, variables: \n", level);
+    if (out == NULL)
+    {
+        out = stdout;
+    }
+    fprintf(out, "Symbol Table, level:%d, variables: \n", level);
     varNode *current = table->variables;
     while (current != NULL)
     {
-        printf("ID: %s | Type: %s | Const: %d | Init: %d | Used: %d\n",
-               current->variable.originalId,
-               valTypeToString(current->variable.type),
-               current->variable.isConst,
-               current->variable.isInitialized,
-               current->variable.isUsed);
+        fprintf(out, "ID: %s | Type: %s | Const: %d | Init: %d | Used: %d\n",
+                current->variable.originalId,
+                valTypeToString(current->variable.type),
+                current->variable.isConst,
+                current->variable.isInitialized,
+                current->variable.isUsed);
         // varToString(&current->variable));
         current = current->next;
     }
     symbolTable *child = table->firstChild;
     while (child != NULL)
     {
-        printSymbolTable(child, level + 1);
+        printSymbolTable(child, level + 1, out);
         child = child->nextSibling;
     }
 }

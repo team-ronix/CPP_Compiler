@@ -28,7 +28,9 @@ int resultCounter = 0;
 int labelsCounter = 0;
 const char *resultQuadFile  = "quads.txt";
 const char *resultErrorFile = "errors.txt";
+const char *resultSymbolTableFile = "symbol_table.txt";
 FILE *quadFile = NULL;
+FILE *symbolTableFile = NULL;
 char* startLabel = NULL;
 char* endLabel = NULL;
 Stack loopStack;
@@ -1178,6 +1180,7 @@ void exitScope(void) {
 int main(int argc, char *argv[]) {
     if (argc >= 2) resultQuadFile  = argv[1];
     if (argc >= 3) resultErrorFile = argv[2];
+    if (argc >= 4) resultSymbolTableFile = argv[3];
 
     globalTable = createSymbolTable(NULL);
 
@@ -1201,10 +1204,20 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Error opening error file\n");
         return 1;
     }
+
+    symbolTableFile = fopen(resultSymbolTableFile, "w");
+    if (symbolTableFile == NULL) {
+        fprintf(stderr, "Error opening symbol table file\n");
+        fclose(quadFile);
+        closeDiagnostics();
+        return 1;
+    }
+
     int parseStatus = yyparse();
-    printSymbolTable(globalTable, 0);
+    printSymbolTable(globalTable, 0, symbolTableFile);
     checkForUnusedVariables(globalTable);
     closeDiagnostics();
     fclose(quadFile);
+    fclose(symbolTableFile);
     return 0;
 }
