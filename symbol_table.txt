@@ -1,0 +1,4 @@
+Symbol Table, level:0, variables: 
+Symbol Table, level:1, variables: 
+ID: a | Type: int | Const: 0 | Init: 1 | Used: 1
+ID: x | Type: int | Const: 0 | Init: 1 | Used: 0
