@@ -1,28 +1,45 @@
-void doNothing() {
+void doNothing()
+{
 }
 
-
-int identity(int x) {
+int identity(int x)
+{
     return x;
 }
 
-
-int add(int a, int b) {
+int add(int a, int b)
+{
     return a + b;
 }
 
+int rec(int x)
+{
+    if (x <= 0)
+    {
+        return 0;
+    }
+    else
+    {
+        return x + rec(x - 1);
+    }
+}
 
-int allBranchesReturn(int x) {
-    if (x > 0) {
+int allBranchesReturn(int x)
+{
+    if (x > 0)
+    {
         return 1;
-    } else {
+    }
+    else
+    {
         return -1;
     }
 }
 
-
-int switchAllReturn(int x) {
-    switch (x) {
+int switchAllReturn(int x)
+{
+    switch (x)
+    {
     case 1:
         return 10;
         break;
@@ -35,9 +52,10 @@ int switchAllReturn(int x) {
     }
 }
 
-
-int switchFallThrough(int x) {
-    switch (x) {
+int switchFallThrough(int x)
+{
+    switch (x)
+    {
     case 1:
     case 2:
         return 10;
@@ -48,30 +66,25 @@ int switchFallThrough(int x) {
     }
 }
 
-
-int withDefault(int a, int b = 5) {
+int withDefault(int a, int b = 5)
+{
     return a + b;
 }
 
-
-int multiDefault(int a = 1, int b = 2) {
+int multiDefault(int a = 1, int b = 2)
+{
     return a + b;
 }
-
-
-
-
-
-
-
 
 int globalVal = 42;
 
-int readGlobal() {
+int readGlobal()
+{
     return globalVal;
 }
 
-int main() {
+int main()
+{
     // 9. explicit args
     int r1 = add(3, 4);
 
