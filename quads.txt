@@ -1,2 +1,0 @@
-FUNC_START, NULL, NULL, main
-DECL, 2, NULL, y_1

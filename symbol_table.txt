@@ -1,3 +1,0 @@
-Symbol Table, level:0, variables: 
-Symbol Table, level:1, variables: 
-ID: y | Type: int | Const: 0 | Init: 1 | Used: 0

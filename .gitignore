@@ -4,4 +4,5 @@
 *.tab.h
 errors.txt
 quads.txt
+symbol_table.txt
 /output/*
